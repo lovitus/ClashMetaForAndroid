@@ -266,3 +266,17 @@ fork CI（可选，按你 fork 继续发布调试包时再带）：
   - 检查 workflow 是否跑在预期分支；
   - 检查 run 是否成功到 `Publish rolling prerelease` 步骤；
   - 检查 release `target_commitish` 是否指向新 SHA。
+
+---
+
+## 9. update-dependencies 安全模式补充（2026-03-15）
+- workflow: `.github/workflows/update-dependencies.yaml`
+- 变更:
+  - 仅允许手动触发（去掉自动 dispatch）
+  - 增加强校验：`target_branch`、`.gitmodules` submodule URL、`.gitmodules` submodule branch
+  - PR 分支按目标分支命名，避免多分支并行时冲突
+- 运行手册:
+  - `UPDATE_DEPENDENCIES_SAFE_MODE_2026-03-15.md`
+- 目标:
+  - 防止多 core / 多分支并行时依赖更新串线
+  - 防止 submodule 被错误拉到非目标 core 线路
