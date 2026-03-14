@@ -211,3 +211,58 @@ fork CI（可选，按你 fork 继续发布调试包时再带）：
 - 若只保功能，保留 A 组文件即可。
 - 若只做视觉调整，可只改 `bg_proxy_group_header.xml`。
 - 若要继续 fork 自动分发调试包，保留 C 组文件与 secrets 流程。
+
+---
+
+## 8. CI/Release Runbook（给下一个 AI）
+
+### 8.1 前置检查（首次或新 fork 必做）
+- 仓库 Actions 必须启用（Repository Settings -> Actions）。
+- 仓库 secrets 必须存在:
+  - `CI_DEBUG_SIGNING_KEYSTORE_DECRYPT_PASSWORD`
+  - `CI_DEBUG_SIGNING_STORE_PASSWORD`
+- `.github/signing/ci-debug.keystore.enc` 必须存在且可解密。
+- Workflow permissions 需允许写 release（`contents: write`）。
+
+### 8.2 合并上游后推荐执行顺序
+1. 基于新 `upstream/main` 建分支并迁移本记录第4节的 commits。
+2. 本地先做至少一次编译验证:
+   - `./gradlew --no-daemon :app:assembleAlphaRelease`
+3. push 到 fork 分支，让 `Build Debug` 自动触发并生成调试 release。
+
+### 8.3 如何触发与观察 CI
+- 自动触发:
+  - `build-debug.yaml`: 任意分支 push 会触发。
+  - `build-pre-release.yaml`: push `main` 触发。
+- 手动触发:
+  - GitHub Actions 页面使用 `Run workflow`。
+  - `build-release.yaml` 需输入 `release-tag`（如 `v2.11.25`）。
+- 运行状态检查（CLI）:
+  - `gh run list --limit 10`
+  - `gh run view <run-id> --log`
+
+### 8.4 如何确认 release 是正确版本
+- 检查 run 的 `head_sha` 是否等于当前分支提交。
+- 检查 release 的 `target_commitish` 是否等于该 `head_sha`。
+- `Build Debug` 产物 tag 规则:
+  - `debug-alpha-<branch>`
+- `Build Pre-Release` 产物 tag 规则:
+  - `main` 分支: `Prerelease-alpha`
+  - 其他分支: `Prerelease-alpha-<branch>`
+
+### 8.5 APK 验签与快速核验（可选）
+- 下载 `arm64-v8a` 后可本地验签:
+  - `apksigner verify --print-certs <apk-path>`
+- 至少确认:
+  - `Verified using v1 scheme: true`
+  - `Verified using v2 scheme: true`
+
+### 8.6 常见失败排查
+- `Decrypt CI debug keystore` 失败:
+  - 通常是 `CI_DEBUG_SIGNING_KEYSTORE_DECRYPT_PASSWORD` 不匹配。
+- `Signing properties` 失败:
+  - 通常是 `CI_DEBUG_SIGNING_STORE_PASSWORD` 缺失或错误。
+- release 未更新:
+  - 检查 workflow 是否跑在预期分支；
+  - 检查 run 是否成功到 `Publish rolling prerelease` 步骤；
+  - 检查 release `target_commitish` 是否指向新 SHA。
