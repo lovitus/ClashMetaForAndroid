@@ -200,17 +200,21 @@ class ProxyGroupAdapter(
         holder.view.apply {
             state = current
 
-            setOnClickListener {
-                clicked(groupIndex, current.proxy.name)
+            if (group.selectable) {
+                setOnClickListener {
+                    clicked(groupIndex, current.proxy.name)
+                }
+            } else {
+                setOnClickListener(null)
             }
 
-            setOnLongClickListener {
-                if (!group.fixable) {
-                    return@setOnLongClickListener false
+            if (group.fixable) {
+                setOnLongClickListener {
+                    longClicked(groupIndex, current.proxy, group.fixed.now == current.proxy.name)
+                    true
                 }
-
-                longClicked(groupIndex, current.proxy, group.fixed.now == current.proxy.name)
-                true
+            } else {
+                setOnLongClickListener(null)
             }
 
             isFocusable = group.selectable || group.fixable

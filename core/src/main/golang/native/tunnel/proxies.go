@@ -8,6 +8,7 @@ import (
 	"github.com/dlclark/regexp2"
 
 	"github.com/metacubex/mihomo/adapter/outboundgroup"
+	"github.com/metacubex/mihomo/component/profile/cachefile"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/constant/provider"
 	"github.com/metacubex/mihomo/log"
@@ -157,7 +158,11 @@ func PatchSelector(selector, name string) bool {
 
 	if err := s.Set(name); err != nil {
 		log.Warnln("Patch selector `%s`: %s", selector, err.Error())
+
+		return false
 	}
+
+	cachefile.Cache().SetSelected(selector, name)
 
 	log.Infoln("Patch selector %s -> %s", selector, name)
 
@@ -196,6 +201,7 @@ func UnfixProxy(selector string) bool {
 	}
 
 	s.ForceSet("")
+	cachefile.Cache().SetSelected(selector, "")
 
 	log.Infoln("Unfix proxy %s", selector)
 

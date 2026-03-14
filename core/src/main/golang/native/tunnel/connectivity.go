@@ -4,6 +4,8 @@ import (
 	"sync"
 
 	"github.com/metacubex/mihomo/adapter/outboundgroup"
+	"github.com/metacubex/mihomo/component/profile/cachefile"
+	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/constant/provider"
 	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/tunnel"
@@ -23,6 +25,11 @@ func HealthCheck(name string) {
 		log.Warnln("Request health check for `%s`: invalid type %s", name, p.Type().String())
 
 		return
+	}
+
+	if selectAble, ok := p.Adapter().(outboundgroup.SelectAble); ok && p.Type() != C.Selector {
+		selectAble.ForceSet("")
+		cachefile.Cache().SetSelected(p.Name(), "")
 	}
 
 	wg := &sync.WaitGroup{}
