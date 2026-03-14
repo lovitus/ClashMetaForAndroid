@@ -25,6 +25,7 @@ var processors = []processor{
 	patchTun,
 	patchListeners,
 	patchProviders,
+	patchProxyGroupsPersistentPin,
 	validConfig,
 }
 
@@ -118,6 +119,28 @@ func patchProviders(cfg *config.RawConfig, profileDir string) error {
 		}
 		provider["path"] = profileDir + "/providers/" + path
 	})
+
+	return nil
+}
+
+func patchProxyGroupsPersistentPin(cfg *config.RawConfig, _ string) error {
+	for _, group := range cfg.ProxyGroup {
+		groupType, _ := group["type"].(string)
+		if groupType != "url-test" && groupType != "fallback" {
+			continue
+		}
+
+		name, _ := group["name"].(string)
+		group["persistent-pin"] = true
+
+		if _, ok := group["pin-unhealthy-log-interval"]; !ok {
+			group["pin-unhealthy-log-interval"] = 10
+		}
+
+		if name != "" {
+			log.Infoln("Enable persistent-pin for group `%s` (%s)", name, groupType)
+		}
+	}
 
 	return nil
 }
