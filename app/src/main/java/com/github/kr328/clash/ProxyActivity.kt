@@ -4,7 +4,9 @@ import com.github.kr328.clash.common.util.intent
 import com.github.kr328.clash.core.Clash
 import com.github.kr328.clash.core.model.Proxy
 import com.github.kr328.clash.design.ProxyDesign
+import com.github.kr328.clash.design.R as DesignR
 import com.github.kr328.clash.design.model.ProxyState
+import com.github.kr328.clash.design.ui.ToastDuration
 import com.github.kr328.clash.util.withClash
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.isActive
@@ -108,18 +110,26 @@ class ProxyActivity : BaseActivity<ProxyDesign>() {
                             design.updateSelection(it.index)
                         }
                         is ProxyDesign.Request.Pin -> {
-                            withClash {
+                            val success = withClash {
                                 pinProxy(names[it.index], it.name)
                             }
 
-                            design.requests.send(ProxyDesign.Request.ReloadAll)
+                            if (success) {
+                                design.requests.send(ProxyDesign.Request.ReloadAll)
+                            } else {
+                                design.showToast(DesignR.string.proxy_fix_failed, ToastDuration.Short)
+                            }
                         }
                         is ProxyDesign.Request.Unfix -> {
-                            withClash {
+                            val success = withClash {
                                 unfixProxy(names[it.index])
                             }
 
-                            design.requests.send(ProxyDesign.Request.ReloadAll)
+                            if (success) {
+                                design.requests.send(ProxyDesign.Request.ReloadAll)
+                            } else {
+                                design.showToast(DesignR.string.proxy_unfix_failed, ToastDuration.Short)
+                            }
                         }
                         is ProxyDesign.Request.UrlTest -> {
                             launch {
