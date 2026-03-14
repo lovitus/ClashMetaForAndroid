@@ -275,3 +275,17 @@ fork CI（可选，按你 fork 继续发布调试包时再带）：
   - 对比 `codex/proxy-vertical-pin` 与 `codex/proxy-vertical-pin-custom-mihomo` 的净差异
   - 标注“通用可回迁修复”与“custom/debug 专用改动”
   - 给出后续合并 upstream 时两个分支各自的处理顺序
+
+---
+
+## 10. update-dependencies 安全模式补充（2026-03-15）
+- workflow: `.github/workflows/update-dependencies.yaml`
+- 变更:
+  - 仅允许手动触发（去掉自动 dispatch）
+  - 增加强校验：`target_branch`、`.gitmodules` submodule URL、`.gitmodules` submodule branch
+  - PR 分支按目标分支命名，避免多分支并行时冲突
+- 运行手册:
+  - `UPDATE_DEPENDENCIES_SAFE_MODE_2026-03-15.md`
+- 目标:
+  - 防止多 core / 多分支并行时依赖更新串线
+  - 防止 submodule 被错误拉到非目标 core 线路

@@ -1,19 +1,110 @@
-name: Update Clash-Core and Go Modules
+name: Update Clash-Core and Go Modules (Manual Guarded)
+
 on:
-  repository_dispatch:
-    types:
-      - core-updated
   workflow_dispatch:
+    inputs:
+      target_branch:
+        description: "Branch to update and open PR against"
+        required: true
+        default: "codex/proxy-vertical-pin-custom-mihomo"
+        type: string
+      expected_submodule_url:
+        description: "Expected clash-foss submodule URL in .gitmodules"
+        required: true
+        default: "https://github.com/lovitus/mihomo"
+        type: string
+      expected_submodule_branch:
+        description: "Expected clash-foss submodule branch in .gitmodules"
+        required: true
+        default: "codex/persistent-pin-option"
+        type: string
+      create_pr:
+        description: "Create PR automatically"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: update-dependencies-${{ inputs.target_branch }}
+  cancel-in-progress: true
 
 jobs:
   update-dependencies:
     runs-on: ubuntu-latest
+    env:
+      TARGET_BRANCH: ${{ inputs.target_branch }}
+      EXPECTED_SUBMODULE_URL: ${{ inputs.expected_submodule_url }}
+      EXPECTED_SUBMODULE_BRANCH: ${{ inputs.expected_submodule_branch }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-      
+        with:
+          ref: ${{ inputs.target_branch }}
+          fetch-depth: 0
+
+      - name: Validate branch and submodule mapping
+        id: guard
+        run: |
+          set -euo pipefail
+          CURRENT_BRANCH=$(git branch --show-current)
+          if [ "$CURRENT_BRANCH" != "$TARGET_BRANCH" ]; then
+            echo "Expected branch '$TARGET_BRANCH' but checked out '$CURRENT_BRANCH'."
+            exit 1
+          fi
+
+          ACTUAL_SUBMODULE_URL=$(git config -f .gitmodules --get submodule.clash-foss.url || true)
+          ACTUAL_SUBMODULE_BRANCH=$(git config -f .gitmodules --get submodule.clash-foss.branch || true)
+
+          echo "Branch: $CURRENT_BRANCH"
+          echo ".gitmodules url: $ACTUAL_SUBMODULE_URL"
+          echo ".gitmodules branch: $ACTUAL_SUBMODULE_BRANCH"
+
+          if [ "$ACTUAL_SUBMODULE_URL" != "$EXPECTED_SUBMODULE_URL" ]; then
+            echo "Submodule URL mismatch."
+            echo "Expected: $EXPECTED_SUBMODULE_URL"
+            echo "Actual:   $ACTUAL_SUBMODULE_URL"
+            exit 1
+          fi
+
+          if [ "$ACTUAL_SUBMODULE_BRANCH" != "$EXPECTED_SUBMODULE_BRANCH" ]; then
+            echo "Submodule branch mismatch."
+            echo "Expected: $EXPECTED_SUBMODULE_BRANCH"
+            echo "Actual:   $ACTUAL_SUBMODULE_BRANCH"
+            exit 1
+          fi
+
+          SAFE_BRANCH=$(printf '%s' "$TARGET_BRANCH" | tr '/ ' '-' | tr -cd '[:alnum:]._-')
+          if [ -z "$SAFE_BRANCH" ]; then
+            SAFE_BRANCH="unknown"
+          fi
+
+          echo "safe_branch=$SAFE_BRANCH" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout submodules at pinned commit
+        run: git submodule update --init --recursive --force
+
+      - name: Capture submodule commit before update
+        id: submodule-before
+        run: |
+          set -euo pipefail
+          BEFORE_SHA=$(git -C core/src/foss/golang/clash rev-parse HEAD)
+          echo "sha=$BEFORE_SHA" >> "$GITHUB_OUTPUT"
+          echo "Submodule before update: $BEFORE_SHA"
+
       - name: Checkout and Update submodules
         run: git submodule update --init --recursive --remote --force
+
+      - name: Capture submodule commit after update
+        id: submodule-after
+        run: |
+          set -euo pipefail
+          AFTER_SHA=$(git -C core/src/foss/golang/clash rev-parse HEAD)
+          echo "sha=$AFTER_SHA" >> "$GITHUB_OUTPUT"
+          echo "Submodule after update: $AFTER_SHA"
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -25,13 +116,13 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version: "1.26"
-          check-latest: true # Always check for the latest patch release
+          check-latest: true
 
       - name: Apply Patches
         run: |
-          cd $(go env GOROOT)
-          for p in $GITHUB_WORKSPACE/.github/patch/*.patch; do patch --verbose -p 1 < "$p"; done
-      
+          cd "$(go env GOROOT)"
+          for p in "$GITHUB_WORKSPACE"/.github/patch/*.patch; do patch --verbose -p 1 < "$p"; done
+
       - uses: actions/cache@v4
         with:
           path: |
@@ -42,46 +133,74 @@ jobs:
             ${{ runner.os }}-go-
 
       - name: Install update-go-mod-replace
-        run: |
-          go install github.com/metacubex/update-go-mod-replace@latest
+        run: go install github.com/metacubex/update-go-mod-replace@latest
 
       - name: Update Foss Gomod
         run: |
-          cd ${{ github.workspace }}/core/src/foss/golang/
-          update-go-mod-replace ${{ github.workspace }}/core/src/foss/golang/clash/go.mod $(pwd)/go.mod
+          cd "$GITHUB_WORKSPACE/core/src/foss/golang/"
+          update-go-mod-replace "$GITHUB_WORKSPACE/core/src/foss/golang/clash/go.mod" "$(pwd)/go.mod"
           go mod tidy
 
       - name: Update Main Gomod
         run: |
-          cd ${{ github.workspace }}/core/src/main/golang/
-          update-go-mod-replace ${{ github.workspace }}/core/src/foss/golang/clash/go.mod $(pwd)/go.mod
+          cd "$GITHUB_WORKSPACE/core/src/main/golang/"
+          update-go-mod-replace "$GITHUB_WORKSPACE/core/src/foss/golang/clash/go.mod" "$(pwd)/go.mod"
           go mod tidy
+
+      - name: Check for dependency changes
+        id: changes
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "No dependency changes detected."
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            git status --short
+          fi
 
       - uses: tibdex/github-app-token@v2
         id: generate-token
+        if: ${{ steps.changes.outputs.has_changes == 'true' && inputs.create_pr }}
         with:
           app_id: ${{ secrets.MAINTAINER_APPID }}
           private_key: ${{ secrets.MAINTAINER_APP_PRIVATE_KEY }}
 
       - name: Create Pull Request
         id: cpr
+        if: ${{ steps.changes.outputs.has_changes == 'true' && inputs.create_pr }}
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ steps.generate-token.outputs.token }}
-          commit-message: Update Dependencies
-          branch: update-dependencies
+          commit-message: "Update Dependencies (${{ inputs.target_branch }})"
+          branch: update-dependencies-${{ steps.guard.outputs.safe_branch }}
+          base: ${{ inputs.target_branch }}
           delete-branch: true
-          title: 'Update Dependencies'
+          title: "Update Dependencies (${{ inputs.target_branch }})"
           draft: false
           body: |
-            - Update Clash-Meta Core
-            - Update Go Module Dependecies
+            - Target branch: `${{ inputs.target_branch }}`
+            - `.gitmodules` guard:
+              - URL: `${{ inputs.expected_submodule_url }}`
+              - Branch: `${{ inputs.expected_submodule_branch }}`
+            - Clash core submodule:
+              - Before: `${{ steps.submodule-before.outputs.sha }}`
+              - After: `${{ steps.submodule-after.outputs.sha }}`
+            - Go modules:
+              - Updated by `update-go-mod-replace` and `go mod tidy` for `core/src/foss/golang` and `core/src/main/golang`
           labels: |
             Update
-        
+
       - name: PR result
         if: ${{ steps.cpr.outputs.pull-request-number }}
         run: |
           echo "Pull Request Number - ${{ steps.cpr.outputs.pull-request-number }}"
           echo "Pull Request URL - ${{ steps.cpr.outputs.pull-request-url }}"
-      
+
+      - name: No changes summary
+        if: ${{ steps.changes.outputs.has_changes == 'false' }}
+        run: echo "No dependency changes found. No PR created."
+
+      - name: PR disabled summary
+        if: ${{ steps.changes.outputs.has_changes == 'true' && !inputs.create_pr }}
+        run: echo "Changes found, but create_pr=false. Skipped PR creation by design."
