@@ -58,6 +58,14 @@ class ClashManager(private val context: Context) : IClashManager,
         }
     }
 
+    override fun pinProxy(group: String, name: String): Boolean {
+        return Clash.patchSelector(group, name)
+    }
+
+    override fun unfixProxy(group: String): Boolean {
+        return Clash.unfixProxy(group)
+    }
+
     override fun patchOverride(slot: Clash.OverrideSlot, configuration: ConfigurationOverride) {
         Clash.patchOverride(slot, configuration)
 

@@ -75,9 +75,10 @@ class ProxyActivity : BaseActivity<ProxyDesign>() {
                                 design.updateGroup(
                                     it.index,
                                     group.proxies,
-                                    group.type == Proxy.Type.Selector,
+                                    group.type,
                                     state,
-                                    unorderedStates
+                                    unorderedStates,
+                                    group.fixed
                                 )
                             }
                         }
@@ -88,7 +89,21 @@ class ProxyActivity : BaseActivity<ProxyDesign>() {
                                 states[it.index].now = it.name
                             }
 
-                            design.requestRedrawVisible()
+                            design.updateSelection(it.index)
+                        }
+                        is ProxyDesign.Request.Pin -> {
+                            withClash {
+                                pinProxy(names[it.index], it.name)
+                            }
+
+                            design.requests.send(ProxyDesign.Request.Reload(it.index))
+                        }
+                        is ProxyDesign.Request.Unfix -> {
+                            withClash {
+                                unfixProxy(names[it.index])
+                            }
+
+                            design.requests.send(ProxyDesign.Request.Reload(it.index))
                         }
                         is ProxyDesign.Request.UrlTest -> {
                             launch {

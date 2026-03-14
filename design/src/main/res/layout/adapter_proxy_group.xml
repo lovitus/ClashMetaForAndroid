@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="?attr/selectableItemBackground"
+    android:clickable="true"
+    android:focusable="true"
+    android:minHeight="@dimen/toolbar_height"
+    android:paddingStart="@dimen/item_header_margin"
+    android:paddingTop="@dimen/proxy_layout_padding"
+    android:paddingEnd="@dimen/item_header_margin"
+    android:paddingBottom="@dimen/proxy_layout_padding">
+
+    <LinearLayout
+        android:id="@+id/group_actions_layout"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentEnd="true"
+        android:layout_centerVertical="true"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <FrameLayout
+            android:layout_width="@dimen/item_tailing_component_size"
+            android:layout_height="@dimen/item_tailing_component_size">
+
+            <ImageView
+                android:id="@+id/url_test_view"
+                android:layout_width="@dimen/item_tailing_component_size"
+                android:layout_height="@dimen/item_tailing_component_size"
+                android:layout_gravity="center"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:clickable="true"
+                android:contentDescription="@string/delay_test"
+                android:focusable="true"
+                android:padding="@dimen/toolbar_image_action_padding"
+                android:src="@drawable/ic_baseline_flash_on" />
+
+            <ProgressBar
+                android:id="@+id/url_test_progress_view"
+                android:layout_width="@dimen/item_tailing_component_size"
+                android:layout_height="@dimen/item_tailing_component_size"
+                android:visibility="gone" />
+        </FrameLayout>
+
+        <ImageView
+            android:id="@+id/expand_view"
+            android:layout_width="@dimen/item_tailing_component_size"
+            android:layout_height="@dimen/item_tailing_component_size"
+            android:contentDescription="@string/more"
+            android:padding="@dimen/toolbar_image_action_padding"
+            android:src="@drawable/ic_baseline_arrow_back" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_centerVertical="true"
+        android:layout_toStartOf="@id/group_actions_layout"
+        android:gravity="center_vertical"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/group_title_view"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textAppearance="@style/TextAppearance.MaterialComponents.Subtitle1"
+            android:textColor="?android:textColorPrimary" />
+
+        <TextView
+            android:id="@+id/group_subtitle_view"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textAppearance="@style/TextAppearance.MaterialComponents.Body2"
+            android:textColor="?android:textColorSecondary" />
+    </LinearLayout>
+</RelativeLayout>

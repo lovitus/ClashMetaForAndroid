@@ -1,6 +1,7 @@
 package tunnel
 
 import (
+	"encoding/json"
 	"sort"
 	"strings"
 
@@ -32,6 +33,7 @@ type Proxy struct {
 type ProxyGroup struct {
 	Type    string   `json:"type"`
 	Now     string   `json:"now"`
+	Fixed   string   `json:"fixed"`
 	Proxies []*Proxy `json:"proxies"`
 }
 
@@ -123,6 +125,7 @@ func QueryProxyGroup(name string, sortMode SortMode, uiSubtitlePattern *regexp2.
 	return &ProxyGroup{
 		Type:    g.Type().String(),
 		Now:     g.Now(),
+		Fixed:   fixedProxy(g),
 		Proxies: proxies,
 	}
 }
@@ -159,6 +162,61 @@ func PatchSelector(selector, name string) bool {
 	closeConnByGroup(selector)
 
 	return true
+}
+
+func UnfixProxy(selector string) bool {
+	p := tunnel.Proxies()[selector]
+
+	if p == nil {
+		log.Warnln("Unfix proxy `%s`: not found", selector)
+
+		return false
+	}
+
+	g, ok := p.Adapter().(outboundgroup.ProxyGroup)
+	if !ok {
+		log.Warnln("Unfix proxy `%s`: invalid type %s", selector, p.Type().String())
+
+		return false
+	}
+
+	if p.Type() == C.Selector {
+		log.Warnln("Unfix proxy `%s`: selector does not support unfix", selector)
+
+		return false
+	}
+
+	s, ok := g.(outboundgroup.SelectAble)
+	if !ok {
+		log.Warnln("Unfix proxy `%s`: invalid type %s", selector, p.Type().String())
+
+		return false
+	}
+
+	s.ForceSet("")
+
+	log.Infoln("Unfix proxy %s", selector)
+
+	closeConnByGroup(selector)
+
+	return true
+}
+
+func fixedProxy(group outboundgroup.ProxyGroup) string {
+	payload, err := json.Marshal(group)
+	if err != nil {
+		return ""
+	}
+
+	var meta struct {
+		Fixed string `json:"fixed"`
+	}
+
+	if err := json.Unmarshal(payload, &meta); err != nil {
+		return ""
+	}
+
+	return meta.Fixed
 }
 
 func convertProxies(proxies []C.Proxy, uiSubtitlePattern *regexp2.Regexp) []*Proxy {

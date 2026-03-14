@@ -5,6 +5,7 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Rect
 import com.github.kr328.clash.core.model.Proxy
+import com.github.kr328.clash.design.R
 import com.github.kr328.clash.design.model.ProxyState
 import kotlin.math.absoluteValue
 import kotlin.math.max
@@ -13,7 +14,8 @@ class ProxyViewState(
     val config: ProxyViewConfig,
     val proxy: Proxy,
     private val parent: ProxyState,
-    private val link: ProxyState?
+    private val link: ProxyState?,
+    private val fixed: ProxyState? = null,
 ) {
     val paint = Paint()
     val rect = Rect()
@@ -54,6 +56,12 @@ class ProxyViewState(
         } else {
             title = proxy.title
             subtitle = proxy.subtitle
+        }
+
+        if (fixed?.now == proxy.name) {
+            subtitle = subtitle.takeIf { it.isNotBlank() }?.let {
+                "$it · ${config.context.getString(R.string.proxy_fixed_badge)}"
+            } ?: config.context.getString(R.string.proxy_fixed_badge)
         }
 
         if (delay != proxy.delay) {

@@ -14,6 +14,10 @@
     <string name="rule_mode">Rule Mode</string>
     <string name="global_mode">Global Mode</string>
     <string name="proxy_empty_tips">No groups can be displayed</string>
+    <string name="collapse_all">Collapse all</string>
+    <string name="proxy_fix_action">Fix this proxy</string>
+    <string name="proxy_unfix_action">Unfix proxy</string>
+    <string name="proxy_fixed_badge">FIX</string>
 
     <string name="profiles">Profiles</string>
     <string name="not_selected">Not selected</string>
