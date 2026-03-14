@@ -1,6 +1,10 @@
 # CI Debug Signing
 
-`.github/signing/ci-debug.keystore.enc` is the encrypted keystore used by `build-debug.yaml`.
+`.github/signing/ci-debug.keystore.enc` is the encrypted keystore used by the CI Android build workflows:
+
+- `build-debug.yaml`
+- `build-pre-release.yaml`
+- `build-release.yaml`
 
 Required GitHub Actions secrets:
 

@@ -7,6 +7,13 @@ on:
         description: 'Release Tag (v2.x.x)'
         required: true
 
+permissions:
+  contents: write
+
+concurrency:
+  group: build-release-${{ inputs.release-tag }}
+  cancel-in-progress: true
+
 jobs:
   BuildRelease:
     runs-on: ubuntu-latest
@@ -51,6 +58,7 @@ jobs:
       - name: Convert and set version env
         id: process-version
         run: |
+          set -euo pipefail
           VERSION_TAG=${{ inputs.release-tag }}
           VERSION_TAG=${VERSION_TAG#v}                              # remove the 'v' prefix
           IFS='.' read -ra VERSION_PARTS <<< "$VERSION_TAG"         # split into array
@@ -70,15 +78,14 @@ jobs:
       # If any change found, commit it and push
       - name: Commit and push if changes
         run: |
-          changes=$(git diff --name-only origin/main | wc -l)
-          if [ $changes -gt 0 ]
-          then
+          set -euo pipefail
+          if ! git diff --quiet -- build.gradle.kts; then
             newVersionName=${{ steps.process-version.outputs.versonName }}
             newVersionCode=${{ steps.process-version.outputs.versonCode }}
             git config --global user.name 'GitHub Action'
             git config --global user.email 'action@github.com'
             git add build.gradle.kts
-            git commit -am "Bump version to $newVersionName ($newVersionCode)"
+            git commit -m "Bump version to $newVersionName ($newVersionCode)"
             git tag "v$newVersionName"
             git push --follow-tags
           fi
@@ -89,19 +96,52 @@ jobs:
           sudo update-ca-certificates
           cp -f /etc/ssl/certs/ca-certificates.crt core/src/foss/golang/clash/component/ca/ca-certificates.crt
 
+      - name: Prepare release metadata
+        id: release-meta
+        env:
+          RELEASE_TAG: ${{ inputs.release-tag }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          CURRENT_SHA=$(git rev-parse HEAD)
+          NOTES_FILE="$RUNNER_TEMP/release-notes.md"
+
+          {
+            echo "Automated release build for \`$RELEASE_TAG\`."
+            echo
+            echo "- Commit: \`$CURRENT_SHA\`"
+            echo "- Workflow: https://github.com/$REPOSITORY/actions/runs/$RUN_ID"
+          } > "$NOTES_FILE"
+
+          echo "notes_file=$NOTES_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Decrypt CI signing keystore
+        env:
+          CI_DEBUG_SIGNING_KEYSTORE_DECRYPT_PASSWORD: ${{ secrets.CI_DEBUG_SIGNING_KEYSTORE_DECRYPT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          : "${CI_DEBUG_SIGNING_KEYSTORE_DECRYPT_PASSWORD:?Missing CI_DEBUG_SIGNING_KEYSTORE_DECRYPT_PASSWORD}"
+
+          openssl enc -d -aes-256-cbc -pbkdf2 \
+            -in .github/signing/ci-debug.keystore.enc \
+            -out "$RUNNER_TEMP/ci-debug.keystore" \
+            -pass env:CI_DEBUG_SIGNING_KEYSTORE_DECRYPT_PASSWORD
+
+          echo "SIGNING_KEYSTORE_FILE=$RUNNER_TEMP/ci-debug.keystore" >> "$GITHUB_ENV"
+
       - name: Signing properties
         env:
-          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
-          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
-          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+          CI_DEBUG_SIGNING_STORE_PASSWORD: ${{ secrets.CI_DEBUG_SIGNING_STORE_PASSWORD }}
         run: |
-          touch signing.properties
-          echo keystore.password="$SIGNING_STORE_PASSWORD" > signing.properties
-          echo key.alias="$SIGNING_KEY_ALIAS" >> signing.properties
-          echo key.password="$SIGNING_KEY_PASSWORD" >> signing.properties
-            
-          echo "cat signing.properties"
-          cat signing.properties
+          set -euo pipefail
+          : "${CI_DEBUG_SIGNING_STORE_PASSWORD:?Missing CI_DEBUG_SIGNING_STORE_PASSWORD}"
+
+          cat > signing.properties <<EOF
+          keystore.password=$CI_DEBUG_SIGNING_STORE_PASSWORD
+          key.alias=ci-debug
+          key.password=$CI_DEBUG_SIGNING_STORE_PASSWORD
+          EOF
 
       - name: Release Build
         if: success()
@@ -114,20 +154,23 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload Release
-        uses: softprops/action-gh-release@v1
+      - name: Publish release
         if: ${{ success() }}
-        with:
-          tag_name: ${{ inputs.release-tag }}
-          files: app/build/outputs/apk/meta/release/*
-          generate_release_notes: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release-tag }}
+          NOTES_FILE: ${{ steps.release-meta.outputs.notes_file }}
+        run: |
+          set -euo pipefail
 
-      - name: Release Changelog Builder
-        uses: mikepenz/release-changelog-builder-action@v4.1.1
-        with:
-          configurationJson: |
-            {
-              "ignore_labels": [
-                "Update"
-              ],
-            }
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" app/build/outputs/apk/meta/release/*.apk --clobber
+            gh release edit "$RELEASE_TAG" --title "$RELEASE_TAG" --notes-file "$NOTES_FILE" --latest
+          else
+            gh release create "$RELEASE_TAG" \
+              app/build/outputs/apk/meta/release/*.apk \
+              --verify-tag \
+              --title "$RELEASE_TAG" \
+              --notes-file "$NOTES_FILE" \
+              --latest
+          fi

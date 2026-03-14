@@ -5,6 +5,13 @@ on:
     branches:
       - main
 
+permissions:
+  contents: write
+
+concurrency:
+  group: build-pre-release-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   BuildPreRelease:
     runs-on: ubuntu-latest
@@ -50,46 +57,91 @@ jobs:
           sudo update-ca-certificates
           cp -f /etc/ssl/certs/ca-certificates.crt core/src/foss/golang/clash/component/ca/ca-certificates.crt
 
+      - name: Prepare release metadata
+        id: release-meta
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          SAFE_REF=$(printf '%s' "$REF_NAME" | tr '/ ' '-' | tr -cd '[:alnum:]._-')
+          if [ -z "$SAFE_REF" ]; then
+            SAFE_REF="run-$RUN_ID"
+          fi
+
+          if [ "$REF_NAME" = "main" ]; then
+            TAG_NAME="Prerelease-alpha"
+            RELEASE_NAME="Prerelease Alpha"
+          else
+            TAG_NAME="Prerelease-alpha-$SAFE_REF"
+            RELEASE_NAME="Prerelease Alpha ($REF_NAME)"
+          fi
+
+          CURRENT_SHA=$(git rev-parse HEAD)
+          NOTES_FILE="$RUNNER_TEMP/prerelease-notes.md"
+
+          {
+            echo "Automated pre-release build for \`$REF_NAME\`."
+            echo
+            echo "- Commit: \`$CURRENT_SHA\`"
+            echo "- Workflow: https://github.com/$REPOSITORY/actions/runs/$RUN_ID"
+          } > "$NOTES_FILE"
+
+          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+          echo "release_name=$RELEASE_NAME" >> "$GITHUB_OUTPUT"
+          echo "notes_file=$NOTES_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Decrypt CI signing keystore
+        env:
+          CI_DEBUG_SIGNING_KEYSTORE_DECRYPT_PASSWORD: ${{ secrets.CI_DEBUG_SIGNING_KEYSTORE_DECRYPT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          : "${CI_DEBUG_SIGNING_KEYSTORE_DECRYPT_PASSWORD:?Missing CI_DEBUG_SIGNING_KEYSTORE_DECRYPT_PASSWORD}"
+
+          openssl enc -d -aes-256-cbc -pbkdf2 \
+            -in .github/signing/ci-debug.keystore.enc \
+            -out "$RUNNER_TEMP/ci-debug.keystore" \
+            -pass env:CI_DEBUG_SIGNING_KEYSTORE_DECRYPT_PASSWORD
+
+          echo "SIGNING_KEYSTORE_FILE=$RUNNER_TEMP/ci-debug.keystore" >> "$GITHUB_ENV"
+
       - name: Signing properties
         env:
-          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
-          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
-          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+          CI_DEBUG_SIGNING_STORE_PASSWORD: ${{ secrets.CI_DEBUG_SIGNING_STORE_PASSWORD }}
         run: |
-          touch signing.properties
-          echo keystore.password="$SIGNING_STORE_PASSWORD" > signing.properties
-          echo key.alias="$SIGNING_KEY_ALIAS" >> signing.properties
-          echo key.password="$SIGNING_KEY_PASSWORD" >> signing.properties
-            
-          echo "cat signing.properties"
-          cat signing.properties
+          set -euo pipefail
+          : "${CI_DEBUG_SIGNING_STORE_PASSWORD:?Missing CI_DEBUG_SIGNING_STORE_PASSWORD}"
+
+          cat > signing.properties <<EOF
+          keystore.password=$CI_DEBUG_SIGNING_STORE_PASSWORD
+          key.alias=ci-debug
+          key.password=$CI_DEBUG_SIGNING_STORE_PASSWORD
+          EOF
 
       - name: Pre-release Build
         if: success()
         run: ./gradlew --no-daemon app:assembleAlphaRelease
 
-      # Delete old Prerelease-alpha
-      - uses: dev-drprasad/delete-tag-and-release@v1.1
-        with:
-          tag_name: Prerelease-alpha
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          delete_release: true
-
-      - name: Tag Repo
-        uses: richardsimko/update-tag@v1
-        with:
-          tag_name: Prerelease-alpha
+      - name: Publish rolling prerelease
+        if: ${{ success() }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ steps.release-meta.outputs.tag_name }}
+          RELEASE_NAME: ${{ steps.release-meta.outputs.release_name }}
+          NOTES_FILE: ${{ steps.release-meta.outputs.notes_file }}
+        run: |
+          set -euo pipefail
+          TARGET_SHA=$(git rev-parse HEAD)
 
-      - name: Upload Alpha
-        uses: softprops/action-gh-release@v2
-        if: ${{  success() }}
-        with:
-          tag_name: Prerelease-alpha
-          files: app/build/outputs/apk/alpha/release/*
-          prerelease: true
-          generate_release_notes: true
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            gh release delete "$TAG_NAME" --cleanup-tag --yes
+          fi
 
-      - name: Release Changelog Builder
-        uses: mikepenz/release-changelog-builder-action@v4
+          gh release create "$TAG_NAME" \
+            app/build/outputs/apk/alpha/release/*.apk \
+            --target "$TARGET_SHA" \
+            --title "$RELEASE_NAME" \
+            --notes-file "$NOTES_FILE" \
+            --prerelease \
+            --latest=false
