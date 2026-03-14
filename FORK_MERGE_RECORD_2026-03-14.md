@@ -266,3 +266,12 @@ fork CI（可选，按你 fork 继续发布调试包时再带）：
   - 检查 workflow 是否跑在预期分支；
   - 检查 run 是否成功到 `Publish rolling prerelease` 步骤；
   - 检查 release `target_commitish` 是否指向新 SHA。
+
+---
+
+## 9. 分支维护补充（2026-03-15）
+- 新增文档: `FORK_BRANCH_MAINTENANCE_2026-03-15.md`
+- 用途:
+  - 对比 `codex/proxy-vertical-pin` 与 `codex/proxy-vertical-pin-custom-mihomo` 的净差异
+  - 标注“通用可回迁修复”与“custom/debug 专用改动”
+  - 给出后续合并 upstream 时两个分支各自的处理顺序
