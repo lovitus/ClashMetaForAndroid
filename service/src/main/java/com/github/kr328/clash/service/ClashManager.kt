@@ -59,11 +59,19 @@ class ClashManager(private val context: Context) : IClashManager,
     }
 
     override fun pinProxy(group: String, name: String): Boolean {
-        return Clash.patchSelector(group, name)
+        return Clash.patchSelector(group, name).also {
+            val current = store.activeProfile ?: return@also
+
+            SelectionDao().removeSelected(current, group)
+        }
     }
 
     override fun unfixProxy(group: String): Boolean {
-        return Clash.unfixProxy(group)
+        return Clash.unfixProxy(group).also {
+            val current = store.activeProfile ?: return@also
+
+            SelectionDao().removeSelected(current, group)
+        }
     }
 
     override fun patchOverride(slot: Clash.OverrideSlot, configuration: ConfigurationOverride) {

@@ -22,6 +22,7 @@ class ProxyActivity : BaseActivity<ProxyDesign>() {
         val states = List(names.size) { ProxyState("?") }
         val unorderedStates = names.indices.map { names[it] to states[it] }.toMap()
         val reloadLock = Semaphore(10)
+        val reloadVersions = IntArray(names.size)
 
         val design = ProxyDesign(
             this,
@@ -70,12 +71,19 @@ class ProxyActivity : BaseActivity<ProxyDesign>() {
                             }
                         }
                         is ProxyDesign.Request.Reload -> {
+                            val version = ++reloadVersions[it.index]
+
                             launch {
                                 val group = reloadLock.withPermit {
                                     withClash {
                                         queryProxyGroup(names[it.index], uiStore.proxySort)
                                     }
                                 }
+
+                                if (version != reloadVersions[it.index]) {
+                                    return@launch
+                                }
+
                                 val state = states[it.index]
 
                                 state.now = group.now
@@ -104,14 +112,14 @@ class ProxyActivity : BaseActivity<ProxyDesign>() {
                                 pinProxy(names[it.index], it.name)
                             }
 
-                            design.requests.send(ProxyDesign.Request.Reload(it.index))
+                            design.requests.send(ProxyDesign.Request.ReloadAll)
                         }
                         is ProxyDesign.Request.Unfix -> {
                             withClash {
                                 unfixProxy(names[it.index])
                             }
 
-                            design.requests.send(ProxyDesign.Request.Reload(it.index))
+                            design.requests.send(ProxyDesign.Request.ReloadAll)
                         }
                         is ProxyDesign.Request.UrlTest -> {
                             launch {
