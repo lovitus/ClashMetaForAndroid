@@ -74,16 +74,24 @@ jobs:
             SAFE_REF="run-$RUN_ID"
           fi
           NOTES_FILE="$RUNNER_TEMP/release-notes.md"
+          MIHOMO_BRANCH=$(git config -f .gitmodules --get submodule.clash-foss.branch || true)
+          if [ -z "${MIHOMO_BRANCH:-}" ]; then
+            MIHOMO_BRANCH="unknown"
+          fi
+          MIHOMO_SHA=$(git -C core/src/foss/golang/clash rev-parse HEAD)
 
           {
-            echo "Automated debug build for \`$REF_NAME\`."
+            echo "Automated debug build (log debugging) for \`$REF_NAME\`."
             echo
+            echo "- CMFA branch: \`$REF_NAME\`"
+            echo "- mihomo branch: \`$MIHOMO_BRANCH\`"
+            echo "- mihomo commit: \`$MIHOMO_SHA\`"
             echo "- Commit: \`$SHA\`"
             echo "- Workflow: https://github.com/$REPOSITORY/actions/runs/$RUN_ID"
           } > "$NOTES_FILE"
 
           echo "tag_name=debug-alpha-$SAFE_REF" >> "$GITHUB_OUTPUT"
-          echo "release_name=Debug Alpha ($REF_NAME)" >> "$GITHUB_OUTPUT"
+          echo "release_name=Debug Alpha ($REF_NAME) - log debugging" >> "$GITHUB_OUTPUT"
           echo "notes_file=$NOTES_FILE" >> "$GITHUB_OUTPUT"
 
       - name: Decrypt CI debug keystore
