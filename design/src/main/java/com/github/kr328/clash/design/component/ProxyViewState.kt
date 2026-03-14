@@ -38,30 +38,35 @@ class ProxyViewState(
         val frameTime = System.currentTimeMillis()
         var invalidate = false
 
-        if (proxy.type.group) {
+        val baseSubtitle = if (proxy.type.group) {
             title = proxy.name
 
             if (link == null) {
-                subtitle = proxy.type.name
+                proxy.type.name
             } else {
-                if (linkNow !== link.now) {
-                    linkNow = link.now
+                val current = link.now
 
-                    subtitle = "%s(%s)".format(
-                        proxy.type.name,
-                        link.now.ifEmpty { "*" }
-                    )
+                if (linkNow != current) {
+                    linkNow = current
                 }
+
+                "%s(%s)".format(
+                    proxy.type.name,
+                    current.ifEmpty { "*" }
+                )
             }
         } else {
             title = proxy.title
-            subtitle = proxy.subtitle
+            proxy.subtitle
         }
 
-        if (fixed?.now == proxy.name) {
-            subtitle = subtitle.takeIf { it.isNotBlank() }?.let {
-                "$it · ${config.context.getString(R.string.proxy_fixed_badge)}"
-            } ?: config.context.getString(R.string.proxy_fixed_badge)
+        val fixedBadge = config.context.getString(R.string.proxy_fixed_badge)
+        subtitle = if (fixed?.now == proxy.name) {
+            baseSubtitle.takeIf { it.isNotBlank() }?.let {
+                "$it · $fixedBadge"
+            } ?: fixedBadge
+        } else {
+            baseSubtitle
         }
 
         if (delay != proxy.delay) {
