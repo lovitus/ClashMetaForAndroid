@@ -4,6 +4,7 @@ import (
 	"os"
 	P "path"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"cfa/native/app"
@@ -26,6 +27,64 @@ func logDns(cfg *config.RawConfig) {
 
 	for _, line := range strings.Split(string(bytes), "\n") {
 		log.Infoln("  %s", line)
+	}
+}
+
+func toInt(v any, fallback int) int {
+	switch value := v.(type) {
+	case int:
+		return value
+	case int8:
+		return int(value)
+	case int16:
+		return int(value)
+	case int32:
+		return int(value)
+	case int64:
+		return int(value)
+	case uint:
+		return int(value)
+	case uint8:
+		return int(value)
+	case uint16:
+		return int(value)
+	case uint32:
+		return int(value)
+	case uint64:
+		return int(value)
+	case float32:
+		return int(value)
+	case float64:
+		return int(value)
+	case string:
+		if parsed, err := strconv.Atoi(strings.TrimSpace(value)); err == nil {
+			return parsed
+		}
+	}
+
+	return fallback
+}
+
+func logPersistentPinSettings(cfg *config.RawConfig) {
+	for _, group := range cfg.ProxyGroup {
+		groupType, _ := group["type"].(string)
+		if groupType != "url-test" && groupType != "fallback" {
+			continue
+		}
+
+		name, _ := group["name"].(string)
+		persistentPin, _ := group["persistent-pin"].(bool)
+		pinWarnInterval := toInt(group["pin-unhealthy-log-interval"], 10)
+		autoUnfixThreshold := toInt(group["persistent-pin-auto-unfix-threshold"], 10)
+
+		log.Infoln(
+			"group `%s` (%s): persistent-pin=%t pin-unhealthy-log-interval=%ds persistent-pin-auto-unfix-threshold=%d",
+			name,
+			groupType,
+			persistentPin,
+			pinWarnInterval,
+			autoUnfixThreshold,
+		)
 	}
 }
 
@@ -67,6 +126,7 @@ func Load(path string) error {
 	}
 
 	logDns(rawCfg)
+	logPersistentPinSettings(rawCfg)
 
 	cfg, err := Parse(rawCfg)
 	if err != nil {

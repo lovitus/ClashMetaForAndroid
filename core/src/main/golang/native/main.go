@@ -36,6 +36,8 @@ func coreInit(home, versionName, gitVersion C.c_string, sdkVersion C.int) {
 
 //export reset
 func reset() {
+	log.Infoln("[APP] core reset")
+
 	config.LoadDefault()
 	tunnel.ResetStatistic()
 	tunnel.CloseAllConnections()
