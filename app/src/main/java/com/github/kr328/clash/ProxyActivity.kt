@@ -6,13 +6,16 @@ import com.github.kr328.clash.core.model.Proxy
 import com.github.kr328.clash.design.ProxyDesign
 import com.github.kr328.clash.design.model.ProxyState
 import com.github.kr328.clash.util.withClash
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.selects.onTimeout
 import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 
 class ProxyActivity : BaseActivity<ProxyDesign>() {
+    @OptIn(ExperimentalCoroutinesApi::class)
     override suspend fun main() {
         val mode = withClash { queryOverride(Clash.OverrideSlot.Session).mode }
         val names = withClash { queryProxyGroupNames(uiStore.proxyExcludeNotSelectable) }
@@ -47,6 +50,11 @@ class ProxyActivity : BaseActivity<ProxyDesign>() {
                             }
                         }
                         else -> Unit
+                    }
+                }
+                onTimeout(AUTO_REFRESH_INTERVAL) {
+                    names.indices.forEach { idx ->
+                        design.requests.trySend(ProxyDesign.Request.Reload(idx))
                     }
                 }
                 design.requests.onReceive {
@@ -129,5 +137,9 @@ class ProxyActivity : BaseActivity<ProxyDesign>() {
                 }
             }
         }
+    }
+
+    companion object {
+        private const val AUTO_REFRESH_INTERVAL = 5_000L
     }
 }

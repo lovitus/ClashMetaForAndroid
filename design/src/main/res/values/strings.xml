@@ -17,7 +17,7 @@
     <string name="collapse_all">Collapse all</string>
     <string name="proxy_fix_action">Fix this proxy</string>
     <string name="proxy_unfix_action">Unfix proxy</string>
-    <string name="proxy_fixed_badge">FIX</string>
+    <string name="proxy_fixed_badge">📌 Fixed</string>
 
     <string name="profiles">Profiles</string>
     <string name="not_selected">Not selected</string>

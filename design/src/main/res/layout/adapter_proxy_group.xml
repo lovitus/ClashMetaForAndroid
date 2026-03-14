@@ -3,7 +3,7 @@
     <RelativeLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="?attr/selectableItemBackground"
+        android:background="@drawable/bg_proxy_group_header"
         android:clickable="true"
         android:focusable="true"
         android:minHeight="@dimen/toolbar_height"

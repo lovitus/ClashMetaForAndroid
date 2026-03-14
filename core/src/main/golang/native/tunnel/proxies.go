@@ -122,10 +122,12 @@ func QueryProxyGroup(name string, sortMode SortMode, uiSubtitlePattern *regexp2.
 	default:
 	}
 
+	now, fixed := normalizedGroupSelection(g)
+
 	return &ProxyGroup{
 		Type:    g.Type().String(),
-		Now:     g.Now(),
-		Fixed:   fixedProxy(g),
+		Now:     now,
+		Fixed:   fixed,
 		Proxies: proxies,
 	}
 }
@@ -202,21 +204,31 @@ func UnfixProxy(selector string) bool {
 	return true
 }
 
-func fixedProxy(group outboundgroup.ProxyGroup) string {
+func normalizedGroupSelection(group outboundgroup.ProxyGroup) (string, string) {
+	now := group.Now()
 	payload, err := json.Marshal(group)
 	if err != nil {
-		return ""
+		return now, ""
 	}
 
 	var meta struct {
+		Now   string `json:"now"`
 		Fixed string `json:"fixed"`
 	}
 
 	if err := json.Unmarshal(payload, &meta); err != nil {
-		return ""
+		return now, ""
 	}
 
-	return meta.Fixed
+	if meta.Now != "" {
+		now = meta.Now
+	}
+
+	if meta.Fixed == "" || meta.Now != meta.Fixed {
+		return now, ""
+	}
+
+	return now, meta.Fixed
 }
 
 func convertProxies(proxies []C.Proxy, uiSubtitlePattern *regexp2.Regexp) []*Proxy {

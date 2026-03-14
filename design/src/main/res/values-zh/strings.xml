@@ -203,7 +203,7 @@
     <string name="collapse_all">全部折叠</string>
     <string name="proxy_fix_action">固定当前节点</string>
     <string name="proxy_unfix_action">取消固定</string>
-    <string name="proxy_fixed_badge">固定</string>
+    <string name="proxy_fixed_badge">📌 已固定</string>
     <string name="reverse">反转</string>
     <string name="close">关闭</string>
     <string name="keyword">关键词</string>
