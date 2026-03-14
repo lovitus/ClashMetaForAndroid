@@ -114,22 +114,22 @@ class ProxyActivity : BaseActivity<ProxyDesign>() {
                                 pinProxy(names[it.index], it.name)
                             }
 
-                            if (success) {
-                                design.requests.send(ProxyDesign.Request.ReloadAll)
-                            } else {
+                            if (!success) {
                                 design.showToast(DesignR.string.proxy_fix_failed, ToastDuration.Short)
                             }
+
+                            design.requests.send(ProxyDesign.Request.ReloadAll)
                         }
                         is ProxyDesign.Request.Unfix -> {
                             val success = withClash {
                                 unfixProxy(names[it.index])
                             }
 
-                            if (success) {
-                                design.requests.send(ProxyDesign.Request.ReloadAll)
-                            } else {
+                            if (!success) {
                                 design.showToast(DesignR.string.proxy_unfix_failed, ToastDuration.Short)
                             }
+
+                            design.requests.send(ProxyDesign.Request.ReloadAll)
                         }
                         is ProxyDesign.Request.UrlTest -> {
                             launch {
