@@ -63,20 +63,16 @@ jobs:
           REF_NAME: ${{ github.ref_name }}
           REPOSITORY: ${{ github.repository }}
           RUN_ID: ${{ github.run_id }}
+          SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
           SAFE_REF=$(printf '%s' "$REF_NAME" | tr '/ ' '-' | tr -cd '[:alnum:]._-')
           if [ -z "$SAFE_REF" ]; then
             SAFE_REF="run-$RUN_ID"
           fi
-
-          if [ "$REF_NAME" = "main" ]; then
-            TAG_NAME="Prerelease-alpha"
-            RELEASE_NAME="Prerelease Alpha"
-          else
-            TAG_NAME="Prerelease-alpha-$SAFE_REF"
-            RELEASE_NAME="Prerelease Alpha ($REF_NAME)"
-          fi
+          SHORT_SHA=$(printf '%s' "$SHA" | cut -c1-8)
+          TAG_NAME="prerelease-alpha-$SAFE_REF-$SHORT_SHA-r$RUN_ID"
+          RELEASE_NAME="Prerelease Alpha ($REF_NAME) [$SHORT_SHA / run $RUN_ID]"
 
           CURRENT_SHA=$(git rev-parse HEAD)
           NOTES_FILE="$RUNNER_TEMP/prerelease-notes.md"
@@ -123,7 +119,7 @@ jobs:
         if: success()
         run: ./gradlew --no-daemon app:assembleAlphaRelease
 
-      - name: Publish rolling prerelease
+      - name: Publish prerelease
         if: ${{ success() }}
         env:
           GH_TOKEN: ${{ github.token }}
@@ -133,10 +129,6 @@ jobs:
         run: |
           set -euo pipefail
           TARGET_SHA=$(git rev-parse HEAD)
-
-          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
-            gh release delete "$TAG_NAME" --cleanup-tag --yes
-          fi
 
           gh release create "$TAG_NAME" \
             app/build/outputs/apk/alpha/release/*.apk \
