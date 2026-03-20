@@ -66,6 +66,23 @@ jobs:
           
           echo "versonName=$VERSION_TAG" >> $GITHUB_OUTPUT          # "1.2.3"
           echo "versonCode=$VERSION_CODE" >> $GITHUB_OUTPUT         # "102003"
+
+      - name: Guard existing tag/release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release-tag }}
+        run: |
+          set -euo pipefail
+
+          if git ls-remote --tags origin "refs/tags/$RELEASE_TAG" | grep -q "$RELEASE_TAG"; then
+            echo "Tag '$RELEASE_TAG' already exists on origin. Refusing to overwrite."
+            exit 1
+          fi
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Release '$RELEASE_TAG' already exists. Refusing to overwrite."
+            exit 1
+          fi
       
       # Re-write version in build.gradle.kts
       - name: Re-write version
@@ -162,15 +179,9 @@ jobs:
           NOTES_FILE: ${{ steps.release-meta.outputs.notes_file }}
         run: |
           set -euo pipefail
-
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" app/build/outputs/apk/meta/release/*.apk --clobber
-            gh release edit "$RELEASE_TAG" --title "$RELEASE_TAG" --notes-file "$NOTES_FILE" --latest
-          else
-            gh release create "$RELEASE_TAG" \
-              app/build/outputs/apk/meta/release/*.apk \
-              --verify-tag \
-              --title "$RELEASE_TAG" \
-              --notes-file "$NOTES_FILE" \
-              --latest
-          fi
+          gh release create "$RELEASE_TAG" \
+            app/build/outputs/apk/meta/release/*.apk \
+            --verify-tag \
+            --title "$RELEASE_TAG" \
+            --notes-file "$NOTES_FILE" \
+            --latest

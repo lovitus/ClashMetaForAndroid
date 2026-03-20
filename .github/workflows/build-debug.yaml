@@ -73,6 +73,7 @@ jobs:
           if [ -z "$SAFE_REF" ]; then
             SAFE_REF="run-$RUN_ID"
           fi
+          SHORT_SHA=$(printf '%s' "$SHA" | cut -c1-8)
           NOTES_FILE="$RUNNER_TEMP/release-notes.md"
           MIHOMO_BASE_BRANCH=$(git config -f .gitmodules --get submodule.clash-foss.branch || true)
           if [ -z "${MIHOMO_BASE_BRANCH:-}" ]; then
@@ -100,8 +101,8 @@ jobs:
             echo "- Workflow: https://github.com/$REPOSITORY/actions/runs/$RUN_ID"
           } > "$NOTES_FILE"
 
-          echo "tag_name=debug-alpha-$SAFE_REF" >> "$GITHUB_OUTPUT"
-          echo "release_name=Debug Alpha ($REF_NAME) - log debugging" >> "$GITHUB_OUTPUT"
+          echo "tag_name=debug-alpha-$SAFE_REF-$SHORT_SHA-r$RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "release_name=Debug Alpha ($REF_NAME) - log debugging [$SHORT_SHA / run $RUN_ID]" >> "$GITHUB_OUTPUT"
           echo "notes_file=$NOTES_FILE" >> "$GITHUB_OUTPUT"
 
       - name: Decrypt CI debug keystore
@@ -177,7 +178,7 @@ jobs:
           path: |
             app/build/outputs/apk/alpha/release/*-x86-*.apk
 
-      - name: Publish rolling prerelease
+      - name: Publish prerelease
         if: ${{ success() && github.event_name != 'pull_request' }}
         env:
           GH_TOKEN: ${{ github.token }}
@@ -187,10 +188,6 @@ jobs:
           TARGET_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-
-          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
-            gh release delete "$TAG_NAME" --cleanup-tag --yes
-          fi
 
           gh release create "$TAG_NAME" \
             app/build/outputs/apk/alpha/release/*.apk \

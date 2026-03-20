@@ -289,3 +289,14 @@ fork CI（可选，按你 fork 继续发布调试包时再带）：
 - 目标:
   - 防止多 core / 多分支并行时依赖更新串线
   - 防止 submodule 被错误拉到非目标 core 线路
+
+---
+
+## 11. Release 不覆盖策略（2026-03-20）
+- 要求: 新构建必须新增 release，不允许覆盖旧包。
+- 当前执行:
+  - `build-debug.yaml` 与 `build-pre-release.yaml` 改为唯一 tag（包含 branch/shortsha/runid）。
+  - `build-release.yaml` 若发现同名 tag 或 release 已存在则直接失败。
+- 效果:
+  - 历史验证过的 release 长期可下载。
+  - 避免 rolling tag 覆盖导致“好用版本被冲掉”。

@@ -85,3 +85,17 @@
 - group-as-node 显示 fixed 时，不会出现徽标重复堆叠。
 - UI fixed 状态与内核返回一致，unfix 后显示及时回落。
 - release 元数据中的 branch/core commit 与实际构建一致。
+
+---
+
+## 8. Release Immutability Policy (2026-03-20)
+- 目标: 每次构建新增 release，禁止覆盖旧 release/tag，保留可回滚安装包。
+- `build-debug.yaml`:
+  - tag 使用唯一值: `debug-alpha-<branch>-<shortsha>-r<runid>`
+  - 不再删除同名 release/tag
+- `build-pre-release.yaml`:
+  - tag 使用唯一值: `prerelease-alpha-<branch>-<shortsha>-r<runid>`
+  - 不再删除同名 release/tag
+- `build-release.yaml`:
+  - 发布前强校验：若 tag/release 已存在则失败
+  - 不再执行上传覆盖/notes 覆盖
