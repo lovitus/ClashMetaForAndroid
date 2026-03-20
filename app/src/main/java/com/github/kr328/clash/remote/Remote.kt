@@ -13,6 +13,7 @@ import com.github.kr328.clash.util.verifyApk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 object Remote {
     val broadcasts: Broadcasts = Broadcasts(Global.application)
@@ -35,6 +36,28 @@ object Remote {
                 Log.d("App becomes visible")
                 service.bind()
                 broadcasts.register()
+
+                Global.launch(Dispatchers.IO) {
+                    val start = System.currentTimeMillis()
+                    val snapshot = withTimeoutOrNull(STATUS_SYNC_TIMEOUT_MS) {
+                        StatusSnapshot(
+                            hasProfile = StatusClient(Global.application).currentProfile() != null
+                        )
+                    }
+                    val elapsed = System.currentTimeMillis() - start
+
+                    if (snapshot == null) {
+                        Log.w("Sync running state timeout while app visible (>${STATUS_SYNC_TIMEOUT_MS}ms)")
+                        return@launch
+                    }
+
+                    val running = snapshot.hasProfile
+                    Log.d("Sync running state while app visible: running=$running elapsed=${elapsed}ms")
+
+                    Global.launch(Dispatchers.Main) {
+                        broadcasts.syncClashRunning(running)
+                    }
+                }
             }
             else {
                 Log.d("App becomes invisible")
@@ -70,4 +93,8 @@ object Remote {
     private fun getLastUpdated(context: Context): Long {
         return context.packageManager.getPackageInfo(context.packageName, 0).lastUpdateTime
     }
+
+    private data class StatusSnapshot(val hasProfile: Boolean)
+
+    private const val STATUS_SYNC_TIMEOUT_MS = 1500L
 }

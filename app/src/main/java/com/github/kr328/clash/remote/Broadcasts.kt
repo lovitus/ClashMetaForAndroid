@@ -98,9 +98,9 @@ class Broadcasts(private val context: Application) {
                 addAction(Intents.ACTION_PROFILE_UPDATE_FAILED)
                 addAction(Intents.ACTION_PROFILE_LOADED)
             })
-
-            clashRunning = StatusClient(context).currentProfile() != null
+            registered = true
         } catch (e: Exception) {
+            registered = false
             Log.w("Register global receiver: $e", e)
         }
     }
@@ -115,6 +115,21 @@ class Broadcasts(private val context: Application) {
             clashRunning = false
         } catch (e: Exception) {
             Log.w("Unregister global receiver: $e", e)
+        } finally {
+            registered = false
+        }
+    }
+
+    fun syncClashRunning(running: Boolean) {
+        if (clashRunning == running)
+            return
+
+        clashRunning = running
+
+        if (running) {
+            receivers.forEach { it.onStarted() }
+        } else {
+            receivers.forEach { it.onStopped(null) }
         }
     }
 }
