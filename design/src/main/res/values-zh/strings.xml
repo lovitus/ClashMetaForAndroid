@@ -201,6 +201,12 @@
     <string name="update_all">更新全部</string>
     <string name="proxy_empty_tips">没有可以显示的组</string>
     <string name="collapse_all">全部折叠</string>
+    <string name="proxy_clear_all_filters">清空过滤</string>
+    <string name="proxy_group_filter_action">过滤本组节点</string>
+    <string name="proxy_group_clear_filter_action">清除本组过滤</string>
+    <string name="proxy_group_filter_hint">输入关键词</string>
+    <string name="proxy_group_filter_title">过滤: %1$s</string>
+    <string name="proxy_group_filter_summary">过滤: %1$s (%2$d/%3$d)</string>
     <string name="proxy_fix_action">固定当前节点</string>
     <string name="proxy_unfix_action">取消固定</string>
     <string name="proxy_fixed_badge">📌 已固定</string>

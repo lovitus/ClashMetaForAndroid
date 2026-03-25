@@ -21,6 +21,29 @@
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
+            <ImageView
+                android:id="@+id/filter_view"
+                android:layout_width="@dimen/item_tailing_component_size"
+                android:layout_height="@dimen/item_tailing_component_size"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:clickable="true"
+                android:contentDescription="@string/proxy_group_filter_action"
+                android:focusable="true"
+                android:padding="@dimen/toolbar_image_action_padding"
+                android:src="@drawable/ic_baseline_search" />
+
+            <ImageView
+                android:id="@+id/clear_filter_view"
+                android:layout_width="@dimen/item_tailing_component_size"
+                android:layout_height="@dimen/item_tailing_component_size"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:clickable="true"
+                android:contentDescription="@string/proxy_group_clear_filter_action"
+                android:focusable="true"
+                android:padding="@dimen/toolbar_image_action_padding"
+                android:src="@drawable/ic_baseline_close"
+                android:visibility="gone" />
+
             <FrameLayout
                 android:layout_width="@dimen/item_tailing_component_size"
                 android:layout_height="@dimen/item_tailing_component_size">

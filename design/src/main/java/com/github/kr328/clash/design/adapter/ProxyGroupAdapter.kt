@@ -1,7 +1,9 @@
 package com.github.kr328.clash.design.adapter
 
 import android.content.Context
+import android.widget.EditText
 import android.view.ViewGroup
+import android.view.View
 import androidx.recyclerview.widget.RecyclerView
 import com.github.kr328.clash.core.model.Proxy
 import com.github.kr328.clash.design.R
@@ -10,12 +12,15 @@ import com.github.kr328.clash.design.component.ProxyViewConfig
 import com.github.kr328.clash.design.component.ProxyViewState
 import com.github.kr328.clash.design.databinding.AdapterProxyGroupBinding
 import com.github.kr328.clash.design.model.ProxyState
+import com.github.kr328.clash.design.store.UiStore
 import com.github.kr328.clash.design.util.invalidateChildren
 import com.github.kr328.clash.design.util.layoutInflater
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 
 class ProxyGroupAdapter(
     private val context: Context,
     private val config: ProxyViewConfig,
+    private val uiStore: UiStore,
     groupNames: List<String>,
     private val clicked: (Int, String) -> Unit,
     private val longClicked: (Int, Proxy, Boolean) -> Unit,
@@ -26,7 +31,10 @@ class ProxyGroupAdapter(
         val fixed: ProxyState = ProxyState(""),
         var type: Proxy.Type = Proxy.Type.Unknown,
         var parent: ProxyState = ProxyState("?"),
+        var allProxies: List<Proxy> = emptyList(),
+        var links: Map<String, ProxyState> = emptyMap(),
         var proxies: List<ProxyViewState> = emptyList(),
+        var filterKeyword: String = "",
         var selectable: Boolean = false,
         var fixable: Boolean = false,
         var expanded: Boolean = true,
@@ -41,7 +49,7 @@ class ProxyGroupAdapter(
     class GroupHolder(val binding: AdapterProxyGroupBinding) : RecyclerView.ViewHolder(binding.root)
     class ProxyHolder(val view: ProxyView) : RecyclerView.ViewHolder(view)
 
-    private val groups = groupNames.map { GroupState(it) }
+    private val groups = groupNames.map { GroupState(it, filterKeyword = uiStore.getProxyGroupFilter(it)) }
     private var items = rebuildItems()
     private var recyclerView: RecyclerView? = null
 
@@ -114,11 +122,10 @@ class ProxyGroupAdapter(
         group.selectable = type == Proxy.Type.Selector
         group.fixable = type == Proxy.Type.URLTest || type == Proxy.Type.Fallback
         group.urlTesting = false
-        group.proxies = proxies.map {
-            val link = if (it.type.group) links[it.name] else null
+        group.allProxies = proxies
+        group.links = links
 
-            ProxyViewState(config, it, parent, link, group.fixed)
-        }
+        rebuildGroupProxies(group)
 
         rebuildAndNotify()
     }
@@ -152,6 +159,21 @@ class ProxyGroupAdapter(
         rebuildAndNotify()
     }
 
+    fun clearAllFilters() {
+        if (groups.none { it.filterKeyword.isNotBlank() }) {
+            return
+        }
+
+        uiStore.clearAllProxyGroupFilters()
+
+        groups.forEach { group ->
+            group.filterKeyword = ""
+            rebuildGroupProxies(group)
+        }
+
+        rebuildAndNotify()
+    }
+
     fun requestRedrawVisible() {
         recyclerView?.invalidateChildren()
     }
@@ -168,14 +190,19 @@ class ProxyGroupAdapter(
         binding.groupSubtitleView.text = buildGroupSubtitle(group)
 
         binding.urlTestView.visibility = if (group.urlTesting) {
-            android.view.View.GONE
+            View.GONE
         } else {
-            android.view.View.VISIBLE
+            View.VISIBLE
         }
         binding.urlTestProgressView.visibility = if (group.urlTesting) {
-            android.view.View.VISIBLE
+            View.VISIBLE
         } else {
-            android.view.View.GONE
+            View.GONE
+        }
+        binding.clearFilterView.visibility = if (group.filterKeyword.isBlank()) {
+            View.GONE
+        } else {
+            View.VISIBLE
         }
         binding.expandView.rotation = if (group.expanded) {
             270f
@@ -190,6 +217,12 @@ class ProxyGroupAdapter(
 
         binding.urlTestView.setOnClickListener {
             urlTestClicked(groupIndex)
+        }
+        binding.filterView.setOnClickListener {
+            showFilterDialog(groupIndex)
+        }
+        binding.clearFilterView.setOnClickListener {
+            clearGroupFilter(groupIndex)
         }
     }
 
@@ -236,7 +269,81 @@ class ProxyGroupAdapter(
             parts.add("${context.getString(R.string.proxy_fixed_badge)}: ${group.fixed.now}")
         }
 
+        if (group.filterKeyword.isNotBlank()) {
+            parts.add(
+                context.getString(
+                    R.string.proxy_group_filter_summary,
+                    group.filterKeyword,
+                    group.proxies.size,
+                    group.allProxies.size
+                )
+            )
+        }
+
         return parts.joinToString(separator = " · ")
+    }
+
+    private fun rebuildGroupProxies(group: GroupState) {
+        val keyword = group.filterKeyword.trim()
+        val normalizedKeyword = keyword.lowercase()
+        val filtered = if (normalizedKeyword.isBlank()) {
+            group.allProxies
+        } else {
+            group.allProxies.filter { proxy ->
+                proxy.name.lowercase().contains(normalizedKeyword) ||
+                    proxy.title.lowercase().contains(normalizedKeyword) ||
+                    proxy.subtitle.lowercase().contains(normalizedKeyword)
+            }
+        }
+
+        group.proxies = filtered.map { proxy ->
+            val link = if (proxy.type.group) group.links[proxy.name] else null
+            ProxyViewState(config, proxy, group.parent, link, group.fixed)
+        }
+    }
+
+    private fun showFilterDialog(groupIndex: Int) {
+        val group = groups[groupIndex]
+        val input = EditText(context).apply {
+            setText(group.filterKeyword)
+            setHint(R.string.proxy_group_filter_hint)
+            setSelection(text.length)
+        }
+
+        MaterialAlertDialogBuilder(context)
+            .setTitle(context.getString(R.string.proxy_group_filter_title, group.name))
+            .setView(input)
+            .setPositiveButton(R.string.save) { _, _ ->
+                applyGroupFilter(groupIndex, input.text?.toString().orEmpty())
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun applyGroupFilter(groupIndex: Int, keyword: String) {
+        val group = groups[groupIndex]
+        val trimmed = keyword.trim()
+
+        if (trimmed == group.filterKeyword) {
+            return
+        }
+
+        group.filterKeyword = trimmed
+        uiStore.setProxyGroupFilter(group.name, trimmed)
+        rebuildGroupProxies(group)
+        rebuildAndNotify()
+    }
+
+    private fun clearGroupFilter(groupIndex: Int) {
+        val group = groups[groupIndex]
+        if (group.filterKeyword.isBlank()) {
+            return
+        }
+
+        group.filterKeyword = ""
+        uiStore.setProxyGroupFilter(group.name, "")
+        rebuildGroupProxies(group)
+        rebuildAndNotify()
     }
 
     private fun rebuildAndNotify() {

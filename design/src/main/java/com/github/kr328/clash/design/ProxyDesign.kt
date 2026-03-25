@@ -46,6 +46,7 @@ class ProxyDesign(
     private val adapter = ProxyGroupAdapter(
         context = context,
         config = config,
+        uiStore = uiStore,
         groupNames = groupNames,
         clicked = { index, name ->
             requests.trySend(Request.Select(index, name))
@@ -103,6 +104,10 @@ class ProxyDesign(
 
     fun collapseAllGroups() {
         adapter.collapseAll()
+    }
+
+    fun clearAllFilters() {
+        adapter.clearAllFilters()
     }
 
     private fun requestUrlTesting(index: Int) {

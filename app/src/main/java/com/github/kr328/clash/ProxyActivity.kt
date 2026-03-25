@@ -3,6 +3,7 @@ package com.github.kr328.clash
 import com.github.kr328.clash.common.util.intent
 import com.github.kr328.clash.core.Clash
 import com.github.kr328.clash.core.model.Proxy
+import com.github.kr328.clash.core.model.TunnelState
 import com.github.kr328.clash.design.ProxyDesign
 import com.github.kr328.clash.design.R as DesignR
 import com.github.kr328.clash.design.model.ProxyState
@@ -25,6 +26,8 @@ class ProxyActivity : BaseActivity<ProxyDesign>() {
         val unorderedStates = names.indices.map { names[it] to states[it] }.toMap()
         val reloadLock = Semaphore(10)
         val reloadVersions = IntArray(names.size)
+        var shouldRestoreGlobalSelection =
+            mode == TunnelState.Mode.Global && uiStore.proxyGlobalLastSelection.isNotBlank()
 
         val design = ProxyDesign(
             this,
@@ -90,6 +93,23 @@ class ProxyActivity : BaseActivity<ProxyDesign>() {
 
                                 state.now = group.now
 
+                                if (shouldRestoreGlobalSelection && names[it.index] == "GLOBAL") {
+                                    shouldRestoreGlobalSelection = false
+
+                                    val remembered = uiStore.proxyGlobalLastSelection
+                                    if (remembered.isNotBlank() &&
+                                        remembered != group.now &&
+                                        group.proxies.any { p -> p.name == remembered }) {
+                                        val restored = withClash {
+                                            patchSelector("GLOBAL", remembered)
+                                        }
+
+                                        if (restored) {
+                                            state.now = remembered
+                                        }
+                                    }
+                                }
+
                                 design.updateGroup(
                                     it.index,
                                     group.proxies,
@@ -101,10 +121,16 @@ class ProxyActivity : BaseActivity<ProxyDesign>() {
                             }
                         }
                         is ProxyDesign.Request.Select -> {
-                            withClash {
+                            val success = withClash {
                                 patchSelector(names[it.index], it.name)
+                            }
 
+                            if (success) {
                                 states[it.index].now = it.name
+
+                                if (names[it.index] == "GLOBAL") {
+                                    uiStore.proxyGlobalLastSelection = it.name
+                                }
                             }
 
                             design.updateSelection(it.index)
@@ -150,6 +176,12 @@ class ProxyActivity : BaseActivity<ProxyDesign>() {
 
                                 patchOverride(Clash.OverrideSlot.Session, o)
                             }
+
+                            shouldRestoreGlobalSelection =
+                                it.mode == TunnelState.Mode.Global &&
+                                    uiStore.proxyGlobalLastSelection.isNotBlank()
+
+                            design.requests.trySend(ProxyDesign.Request.ReloadAll)
                         }
                     }
                 }
