@@ -177,9 +177,21 @@ class ProxyActivity : BaseActivity<ProxyDesign>() {
                                 patchOverride(Clash.OverrideSlot.Session, o)
                             }
 
+                            val remembered = uiStore.proxyGlobalLastSelection
+                            val restoredImmediately = if (
+                                it.mode == TunnelState.Mode.Global && remembered.isNotBlank()
+                            ) {
+                                withClash {
+                                    patchSelector("GLOBAL", remembered)
+                                }
+                            } else {
+                                false
+                            }
+
                             shouldRestoreGlobalSelection =
                                 it.mode == TunnelState.Mode.Global &&
-                                    uiStore.proxyGlobalLastSelection.isNotBlank()
+                                    remembered.isNotBlank() &&
+                                    !restoredImmediately
 
                             design.requests.trySend(ProxyDesign.Request.ReloadAll)
                         }
