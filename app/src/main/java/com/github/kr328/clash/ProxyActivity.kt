@@ -131,6 +131,8 @@ class ProxyActivity : BaseActivity<ProxyDesign>() {
                                 if (names[it.index] == "GLOBAL") {
                                     uiStore.proxyGlobalLastSelection = it.name
                                 }
+                            } else {
+                                design.showToast(DesignR.string.proxy_select_failed, ToastDuration.Short)
                             }
 
                             design.updateSelection(it.index)

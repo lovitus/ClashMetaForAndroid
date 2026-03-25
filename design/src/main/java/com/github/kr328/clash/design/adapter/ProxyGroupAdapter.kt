@@ -16,12 +16,14 @@ import com.github.kr328.clash.design.store.UiStore
 import com.github.kr328.clash.design.util.invalidateChildren
 import com.github.kr328.clash.design.util.layoutInflater
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import java.util.Locale
 
 class ProxyGroupAdapter(
     private val context: Context,
     private val config: ProxyViewConfig,
     private val uiStore: UiStore,
     groupNames: List<String>,
+    private val groupInteracted: (Int) -> Unit,
     private val clicked: (Int, String) -> Unit,
     private val longClicked: (Int, Proxy, Boolean) -> Unit,
     private val urlTestClicked: (Int) -> Unit,
@@ -52,6 +54,13 @@ class ProxyGroupAdapter(
     private val groups = groupNames.map { GroupState(it, filterKeyword = uiStore.getProxyGroupFilter(it)) }
     private var items = rebuildItems()
     private var recyclerView: RecyclerView? = null
+
+    fun findHeaderPosition(groupName: String): Int? {
+        val groupIndex = groups.indexOfFirst { it.name == groupName }
+        if (groupIndex < 0) return null
+
+        return findHeaderPosition(items, groupIndex)
+    }
 
     override fun getItemViewType(position: Int): Int {
         return when (items[position]) {
@@ -115,6 +124,8 @@ class ProxyGroupAdapter(
         fixed: String,
     ) {
         val group = groups[position]
+        val oldProxyCount = group.proxies.size
+        val oldExpanded = group.expanded
 
         group.type = type
         group.parent = parent
@@ -126,8 +137,7 @@ class ProxyGroupAdapter(
         group.links = links
 
         rebuildGroupProxies(group)
-
-        rebuildAndNotify()
+        notifyGroupContentChanged(position, oldProxyCount, group.proxies.size, oldExpanded && group.expanded)
     }
 
     fun updateSelection(position: Int) {
@@ -135,7 +145,7 @@ class ProxyGroupAdapter(
             return
         }
 
-        notifyDataSetChanged()
+        notifyGroupHeaderChanged(position)
     }
 
     fun setUrlTesting(position: Int, urlTesting: Boolean) {
@@ -144,7 +154,7 @@ class ProxyGroupAdapter(
         }
 
         groups[position].urlTesting = urlTesting
-        notifyDataSetChanged()
+        notifyGroupHeaderChanged(position)
     }
 
     fun collapseAll() {
@@ -211,17 +221,21 @@ class ProxyGroupAdapter(
         }
 
         binding.root.setOnClickListener {
+            groupInteracted(groupIndex)
             group.expanded = !group.expanded
             rebuildAndNotify()
         }
 
         binding.urlTestView.setOnClickListener {
+            groupInteracted(groupIndex)
             urlTestClicked(groupIndex)
         }
         binding.filterView.setOnClickListener {
+            groupInteracted(groupIndex)
             showFilterDialog(groupIndex)
         }
         binding.clearFilterView.setOnClickListener {
+            groupInteracted(groupIndex)
             clearGroupFilter(groupIndex)
         }
     }
@@ -235,6 +249,7 @@ class ProxyGroupAdapter(
 
             if (group.selectable) {
                 setOnClickListener {
+                    groupInteracted(groupIndex)
                     clicked(groupIndex, current.proxy.name)
                 }
             } else {
@@ -243,6 +258,7 @@ class ProxyGroupAdapter(
 
             if (group.fixable) {
                 setOnLongClickListener {
+                    groupInteracted(groupIndex)
                     longClicked(groupIndex, current.proxy, group.fixed.now == current.proxy.name)
                     true
                 }
@@ -285,14 +301,14 @@ class ProxyGroupAdapter(
 
     private fun rebuildGroupProxies(group: GroupState) {
         val keyword = group.filterKeyword.trim()
-        val normalizedKeyword = keyword.lowercase()
+        val normalizedKeyword = keyword.lowercase(Locale.ROOT)
         val filtered = if (normalizedKeyword.isBlank()) {
             group.allProxies
         } else {
             group.allProxies.filter { proxy ->
-                proxy.name.lowercase().contains(normalizedKeyword) ||
-                    proxy.title.lowercase().contains(normalizedKeyword) ||
-                    proxy.subtitle.lowercase().contains(normalizedKeyword)
+                proxy.name.lowercase(Locale.ROOT).contains(normalizedKeyword) ||
+                    proxy.title.lowercase(Locale.ROOT).contains(normalizedKeyword) ||
+                    proxy.subtitle.lowercase(Locale.ROOT).contains(normalizedKeyword)
             }
         }
 
@@ -328,10 +344,13 @@ class ProxyGroupAdapter(
             return
         }
 
+        groupInteracted(groupIndex)
         group.filterKeyword = trimmed
         uiStore.setProxyGroupFilter(group.name, trimmed)
+        val oldProxyCount = group.proxies.size
+        val oldExpanded = group.expanded
         rebuildGroupProxies(group)
-        rebuildAndNotify()
+        notifyGroupContentChanged(groupIndex, oldProxyCount, group.proxies.size, oldExpanded && group.expanded)
     }
 
     private fun clearGroupFilter(groupIndex: Int) {
@@ -340,15 +359,73 @@ class ProxyGroupAdapter(
             return
         }
 
+        groupInteracted(groupIndex)
+        val oldProxyCount = group.proxies.size
+        val oldExpanded = group.expanded
         group.filterKeyword = ""
         uiStore.setProxyGroupFilter(group.name, "")
         rebuildGroupProxies(group)
-        rebuildAndNotify()
+        notifyGroupContentChanged(groupIndex, oldProxyCount, group.proxies.size, oldExpanded && group.expanded)
     }
 
     private fun rebuildAndNotify() {
         items = rebuildItems()
         notifyDataSetChanged()
+    }
+
+    private fun notifyGroupContentChanged(
+        groupIndex: Int,
+        oldProxyCount: Int,
+        newProxyCount: Int,
+        expanded: Boolean,
+    ) {
+        val oldItems = items
+        val oldHeader = findHeaderPosition(oldItems, groupIndex) ?: run {
+            rebuildAndNotify()
+            return
+        }
+
+        items = rebuildItems()
+
+        val newHeader = findHeaderPosition(items, groupIndex) ?: run {
+            rebuildAndNotify()
+            return
+        }
+
+        if (oldHeader != newHeader) {
+            notifyDataSetChanged()
+            return
+        }
+
+        notifyItemChanged(newHeader)
+
+        if (!expanded) {
+            return
+        }
+
+        val changed = minOf(oldProxyCount, newProxyCount)
+        if (changed > 0) {
+            notifyItemRangeChanged(newHeader + 1, changed)
+        }
+
+        when {
+            newProxyCount > oldProxyCount ->
+                notifyItemRangeInserted(newHeader + 1 + oldProxyCount, newProxyCount - oldProxyCount)
+            newProxyCount < oldProxyCount ->
+                notifyItemRangeRemoved(newHeader + 1 + newProxyCount, oldProxyCount - newProxyCount)
+        }
+    }
+
+    private fun notifyGroupHeaderChanged(groupIndex: Int) {
+        findHeaderPosition(items, groupIndex)?.let(::notifyItemChanged)
+    }
+
+    private fun findHeaderPosition(items: List<Item>, groupIndex: Int): Int? {
+        val position = items.indexOfFirst { item ->
+            item is Item.Header && item.groupIndex == groupIndex
+        }
+
+        return position.takeIf { it >= 0 }
     }
 
     private fun rebuildItems(): List<Item> {

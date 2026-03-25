@@ -48,6 +48,11 @@ class ProxyDesign(
         config = config,
         uiStore = uiStore,
         groupNames = groupNames,
+        groupInteracted = { index ->
+            if (index in groupNames.indices) {
+                uiStore.proxyLastGroup = groupNames[index]
+            }
+        },
         clicked = { index, name ->
             requests.trySend(Request.Select(index, name))
         },
@@ -155,6 +160,15 @@ class ProxyDesign(
 
             val toolbarHeight = context.getPixels(R.dimen.toolbar_height)
             bindInsets(surface, toolbarHeight * 2)
+
+            val lastGroup = uiStore.proxyLastGroup
+            if (lastGroup.isNotBlank()) {
+                this.post {
+                    adapter.findHeaderPosition(lastGroup)?.let { position ->
+                        scrollToPosition(position)
+                    }
+                }
+            }
         }
 
         if (groupNames.isEmpty()) {

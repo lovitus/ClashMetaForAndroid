@@ -210,6 +210,7 @@
     <string name="proxy_fix_action">固定当前节点</string>
     <string name="proxy_unfix_action">取消固定</string>
     <string name="proxy_fixed_badge">📌 已固定</string>
+    <string name="proxy_select_failed">切换失败</string>
     <string name="proxy_fix_failed">固定失败</string>
     <string name="proxy_unfix_failed">取消固定失败</string>
     <string name="reverse">反转</string>

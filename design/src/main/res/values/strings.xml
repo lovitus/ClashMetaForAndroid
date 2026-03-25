@@ -24,6 +24,7 @@
     <string name="proxy_fix_action">Fix this proxy</string>
     <string name="proxy_unfix_action">Unfix proxy</string>
     <string name="proxy_fixed_badge">📌 Fixed</string>
+    <string name="proxy_select_failed">Switch failed</string>
     <string name="proxy_fix_failed">Fix failed</string>
     <string name="proxy_unfix_failed">Unfix failed</string>
 
