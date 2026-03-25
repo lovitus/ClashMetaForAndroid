@@ -164,7 +164,7 @@ class ProxyDesign(
             val lastGroup = uiStore.proxyLastGroup
             if (lastGroup.isNotBlank()) {
                 this.post {
-                    adapter.findHeaderPosition(lastGroup)?.let { position ->
+                    this@ProxyDesign.adapter.findHeaderPosition(lastGroup)?.let { position ->
                         scrollToPosition(position)
                     }
                 }
