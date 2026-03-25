@@ -75,6 +75,8 @@ jobs:
           fi
           SHORT_SHA=$(printf '%s' "$SHA" | cut -c1-8)
           NOTES_FILE="$RUNNER_TEMP/release-notes.md"
+          COMMITS_FILE="$RUNNER_TEMP/recent-commits.md"
+          FILES_FILE="$RUNNER_TEMP/current-files.md"
           MIHOMO_BASE_BRANCH=$(git config -f .gitmodules --get submodule.clash-foss.branch || true)
           if [ -z "${MIHOMO_BASE_BRANCH:-}" ]; then
             MIHOMO_BASE_BRANCH="unknown"
@@ -90,19 +92,39 @@ jobs:
             fi
           fi
 
+          git log --no-merges -n 15 --pretty=format:'- `%h` %s' > "$COMMITS_FILE"
+          git show --name-only --pretty=format: "$SHA" | sed '/^$/d' | sed 's/^/- `&`/' > "$FILES_FILE"
+
           {
-            echo "Automated debug build (log debugging) for \`$REF_NAME\`."
+            echo "## 调试版本说明 (Debug Build)"
             echo
-            echo "- CMFA branch: \`$REF_NAME\`"
-            echo "- mihomo base branch (.gitmodules): \`$MIHOMO_BASE_BRANCH\`"
-            echo "- mihomo pinned commit (submodule): \`$MIHOMO_SHA\`"
-            echo "- mihomo pinned commit in base branch: \`$MIHOMO_IN_BASE\`"
-            echo "- Commit: \`$SHA\`"
+            echo "> 这是**调试版本**（Debug/Prerelease），用于验证与排障，不作为稳定发布。"
+            echo
+            echo "### 构建信息"
+            echo "- 分支: \`$REF_NAME\`"
+            echo "- 提交: \`$SHA\`"
             echo "- Workflow: https://github.com/$REPOSITORY/actions/runs/$RUN_ID"
+            echo "- mihomo 基线分支(.gitmodules): \`$MIHOMO_BASE_BRANCH\`"
+            echo "- mihomo 子模块提交: \`$MIHOMO_SHA\`"
+            echo "- mihomo 提交是否在基线分支内: \`$MIHOMO_IN_BASE\`"
+            echo
+            echo "### 最近提交（最多 15 条）"
+            if [ -s "$COMMITS_FILE" ]; then
+              cat "$COMMITS_FILE"
+            else
+              echo "- 无提交记录"
+            fi
+            echo
+            echo "### 当前提交改动文件"
+            if [ -s "$FILES_FILE" ]; then
+              cat "$FILES_FILE"
+            else
+              echo "- 无文件改动信息"
+            fi
           } > "$NOTES_FILE"
 
           echo "tag_name=debug-alpha-$SAFE_REF-$SHORT_SHA-r$RUN_ID" >> "$GITHUB_OUTPUT"
-          echo "release_name=Debug Alpha ($REF_NAME) - log debugging [$SHORT_SHA / run $RUN_ID]" >> "$GITHUB_OUTPUT"
+          echo "release_name=Debug Alpha 调试版本 ($REF_NAME) [$SHORT_SHA / run $RUN_ID]" >> "$GITHUB_OUTPUT"
           echo "notes_file=$NOTES_FILE" >> "$GITHUB_OUTPUT"
 
       - name: Decrypt CI debug keystore
