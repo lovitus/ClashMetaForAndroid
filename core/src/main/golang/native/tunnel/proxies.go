@@ -73,7 +73,7 @@ func QueryProxyGroupNames(excludeNotSelectable bool) []string {
 	for _, p := range proxies {
 		if g, ok := p.Adapter().(outboundgroup.ProxyGroup); ok {
 			if !excludeNotSelectable || p.Type() == C.Selector {
-				if g.Hidden() {
+				if isGroupHidden(g) {
 					continue
 				}
 				result = append(result, p.Name())
@@ -226,6 +226,29 @@ func fixedProxy(group outboundgroup.ProxyGroup) string {
 	}
 
 	return meta.Fixed
+}
+
+func isGroupHidden(group outboundgroup.ProxyGroup) bool {
+	// Some kernel versions do not expose Hidden() on ProxyGroup,
+	// so we fall back to metadata parsing to keep compatibility.
+	if getter, ok := any(group).(interface{ Hidden() bool }); ok {
+		return getter.Hidden()
+	}
+
+	payload, err := json.Marshal(group)
+	if err != nil {
+		return false
+	}
+
+	var meta struct {
+		Hidden bool `json:"hidden"`
+	}
+
+	if err := json.Unmarshal(payload, &meta); err != nil {
+		return false
+	}
+
+	return meta.Hidden
 }
 
 func convertProxies(proxies []C.Proxy, uiSubtitlePattern *regexp2.Regexp) []*Proxy {
