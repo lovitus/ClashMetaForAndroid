@@ -17,12 +17,54 @@ concurrency:
 jobs:
   BuildDebug:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        kernel:
+          - id: alpha
+            label: alpha-kernel
+            mode: alpha
+          - id: pin
+            label: persistent-pin
+            mode: pin
+    env:
+      PIN_KERNEL_REF: 1101ff88f227c6575d010a0054b1ed5d31874d91
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
       
       - name: Checkout submodules
         run: git submodule update --init --recursive --force
+
+      - name: Resolve kernel ref
+        id: kernel-ref
+        env:
+          KERNEL_MODE: ${{ matrix.kernel.mode }}
+        run: |
+          set -euo pipefail
+
+          if [ "$KERNEL_MODE" = "alpha" ]; then
+            git fetch --no-tags --depth=1 origin main
+            TARGET_REF=$(git ls-tree FETCH_HEAD core/src/foss/golang/clash | awk '{print $3}')
+            KERNEL_SOURCE="origin/main submodule pointer"
+          else
+            TARGET_REF="$PIN_KERNEL_REF"
+            KERNEL_SOURCE="workflow pinned ref"
+          fi
+
+          if [ -z "${TARGET_REF:-}" ]; then
+            echo "Failed to resolve kernel target ref"
+            exit 1
+          fi
+
+          echo "target_ref=$TARGET_REF" >> "$GITHUB_OUTPUT"
+          echo "kernel_source=$KERNEL_SOURCE" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout kernel submodule ref
+        run: |
+          set -euo pipefail
+          git -C core/src/foss/golang/clash fetch --all --tags --force
+          git -C core/src/foss/golang/clash checkout --force "${{ steps.kernel-ref.outputs.target_ref }}"
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -67,6 +109,9 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           RUN_ID: ${{ github.run_id }}
           SHA: ${{ github.sha }}
+          KERNEL_ID: ${{ matrix.kernel.id }}
+          KERNEL_LABEL: ${{ matrix.kernel.label }}
+          KERNEL_SOURCE: ${{ steps.kernel-ref.outputs.kernel_source }}
         run: |
           set -euo pipefail
           SAFE_REF=$(printf '%s' "$REF_NAME" | tr '/ ' '-' | tr -cd '[:alnum:]._-')
@@ -103,6 +148,8 @@ jobs:
             echo "### 构建信息"
             echo "- 分支: \`$REF_NAME\`"
             echo "- 提交: \`$SHA\`"
+            echo "- 内核档位: \`$KERNEL_ID ($KERNEL_LABEL)\`"
+            echo "- 内核来源: \`$KERNEL_SOURCE\`"
             echo "- Workflow: https://github.com/$REPOSITORY/actions/runs/$RUN_ID"
             echo "- mihomo 基线分支(.gitmodules): \`$MIHOMO_BASE_BRANCH\`"
             echo "- mihomo 子模块提交: \`$MIHOMO_SHA\`"
@@ -123,8 +170,8 @@ jobs:
             fi
           } > "$NOTES_FILE"
 
-          echo "tag_name=debug-alpha-$SAFE_REF-$SHORT_SHA-r$RUN_ID" >> "$GITHUB_OUTPUT"
-          echo "release_name=Debug Alpha 调试版本 ($REF_NAME) [$SHORT_SHA / run $RUN_ID]" >> "$GITHUB_OUTPUT"
+          echo "tag_name=debug-alpha-$SAFE_REF-$KERNEL_ID-$SHORT_SHA-r$RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "release_name=Debug Alpha 调试版本 ($REF_NAME / $KERNEL_LABEL) [$SHORT_SHA / run $RUN_ID]" >> "$GITHUB_OUTPUT"
           echo "notes_file=$NOTES_FILE" >> "$GITHUB_OUTPUT"
 
       - name: Decrypt CI debug keystore
@@ -164,7 +211,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: ${{  success() }}
         with:
-          name: CMFA Debug APK (universal) 
+          name: CMFA Debug APK (universal, ${{ matrix.kernel.id }})
           path: |
             app/build/outputs/apk/alpha/release/*-universal-*.apk
       
@@ -172,7 +219,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: ${{  success() }}
         with:
-          name: CMFA Debug APK (arm64-v8a)
+          name: CMFA Debug APK (arm64-v8a, ${{ matrix.kernel.id }})
           path: |
             app/build/outputs/apk/alpha/release/*-arm64-v8a-*.apk
       
@@ -180,7 +227,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: ${{  success() }}
         with:
-          name: CMFA Debug APK (armeabi-v7a)
+          name: CMFA Debug APK (armeabi-v7a, ${{ matrix.kernel.id }})
           path: |
             app/build/outputs/apk/alpha/release/*-armeabi-v7a-*.apk
       
@@ -188,7 +235,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: ${{  success() }}
         with:
-          name: CMFA Debug APK (x86_64)
+          name: CMFA Debug APK (x86_64, ${{ matrix.kernel.id }})
           path: |
             app/build/outputs/apk/alpha/release/*-x86_64-*.apk
       
@@ -196,7 +243,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: ${{  success() }}
         with:
-          name: CMFA Debug APK (x86)
+          name: CMFA Debug APK (x86, ${{ matrix.kernel.id }})
           path: |
             app/build/outputs/apk/alpha/release/*-x86-*.apk
 

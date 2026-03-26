@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       release-tag:
-        description: 'Release Tag (v2.x.x)'
+        description: "Release Tag (v2.x.x)"
         required: true
 
 permissions:
@@ -15,57 +15,28 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  BuildRelease:
+  PrepareRelease:
     runs-on: ubuntu-latest
+    outputs:
+      target_sha: ${{ steps.prepare.outputs.target_sha }}
+      release_tag: ${{ steps.prepare.outputs.release_tag }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
-      - name: Checkout submodules
-        run: git submodule update --init --recursive --force
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: "temurin"
-          java-version: 21
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: "1.26"
-          check-latest: true # Always check for the latest patch release
-
-      - name: Apply Patches
-        run: |
-          cd $(go env GOROOT)
-          for p in $GITHUB_WORKSPACE/.github/patch/*.patch; do patch --verbose -p 1 < "$p"; done
-
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-      
       - name: Convert and set version env
         id: process-version
         run: |
           set -euo pipefail
           VERSION_TAG=${{ inputs.release-tag }}
-          VERSION_TAG=${VERSION_TAG#v}                              # remove the 'v' prefix
-          IFS='.' read -ra VERSION_PARTS <<< "$VERSION_TAG"         # split into array
+          VERSION_TAG=${VERSION_TAG#v}
+          IFS='.' read -ra VERSION_PARTS <<< "$VERSION_TAG"
           VERSION_CODE=$(printf "%1d%02d%03d" "${VERSION_PARTS[0]}" "${VERSION_PARTS[1]}" "${VERSION_PARTS[2]}")
-          
-          echo "versonName=$VERSION_TAG" >> $GITHUB_OUTPUT          # "1.2.3"
-          echo "versonCode=$VERSION_CODE" >> $GITHUB_OUTPUT         # "102003"
+
+          echo "versonName=$VERSION_TAG" >> "$GITHUB_OUTPUT"
+          echo "versonCode=$VERSION_CODE" >> "$GITHUB_OUTPUT"
 
       - name: Guard existing tag/release
         env:
@@ -83,55 +54,126 @@ jobs:
             echo "Release '$RELEASE_TAG' already exists. Refusing to overwrite."
             exit 1
           fi
-      
-      # Re-write version in build.gradle.kts
+
       - name: Re-write version
         uses: Devofure/advance-android-version-actions@v1.5
         with:
           gradlePath: build.gradle.kts
           versionCode: ${{ steps.process-version.outputs.versonCode }}
           versionName: ${{ steps.process-version.outputs.versonName }}
-      
-      # If any change found, commit it and push
-      - name: Commit and push if changes
+
+      - name: Commit/tag and push
+        id: prepare
+        env:
+          RELEASE_TAG: ${{ inputs.release-tag }}
+          NEW_VERSION_NAME: ${{ steps.process-version.outputs.versonName }}
+          NEW_VERSION_CODE: ${{ steps.process-version.outputs.versonCode }}
         run: |
           set -euo pipefail
+
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+
           if ! git diff --quiet -- build.gradle.kts; then
-            newVersionName=${{ steps.process-version.outputs.versonName }}
-            newVersionCode=${{ steps.process-version.outputs.versonCode }}
-            git config --global user.name 'GitHub Action'
-            git config --global user.email 'action@github.com'
             git add build.gradle.kts
-            git commit -m "Bump version to $newVersionName ($newVersionCode)"
-            git tag "v$newVersionName"
-            git push --follow-tags
+            git commit -m "Bump version to $NEW_VERSION_NAME ($NEW_VERSION_CODE)"
           fi
+
+          TARGET_SHA=$(git rev-parse HEAD)
+          git tag "$RELEASE_TAG" "$TARGET_SHA"
+
+          git push origin HEAD
+          git push origin "$RELEASE_TAG"
+
+          echo "target_sha=$TARGET_SHA" >> "$GITHUB_OUTPUT"
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+
+  BuildRelease:
+    needs: PrepareRelease
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        kernel:
+          - id: alpha
+            label: alpha-kernel
+            mode: alpha
+          - id: pin
+            label: persistent-pin
+            mode: pin
+    env:
+      PIN_KERNEL_REF: 1101ff88f227c6575d010a0054b1ed5d31874d91
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.PrepareRelease.outputs.target_sha }}
+
+      - name: Checkout submodules
+        run: git submodule update --init --recursive --force
+
+      - name: Resolve kernel ref
+        id: kernel-ref
+        env:
+          KERNEL_MODE: ${{ matrix.kernel.mode }}
+        run: |
+          set -euo pipefail
+
+          if [ "$KERNEL_MODE" = "alpha" ]; then
+            git fetch --no-tags --depth=1 origin main
+            TARGET_REF=$(git ls-tree FETCH_HEAD core/src/foss/golang/clash | awk '{print $3}')
+          else
+            TARGET_REF="$PIN_KERNEL_REF"
+          fi
+
+          if [ -z "${TARGET_REF:-}" ]; then
+            echo "Failed to resolve kernel target ref"
+            exit 1
+          fi
+
+          echo "target_ref=$TARGET_REF" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout kernel submodule ref
+        run: |
+          set -euo pipefail
+          git -C core/src/foss/golang/clash fetch --all --tags --force
+          git -C core/src/foss/golang/clash checkout --force "${{ steps.kernel-ref.outputs.target_ref }}"
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: 21
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.26"
+          check-latest: true
+
+      - name: Apply Patches
+        run: |
+          cd "$(go env GOROOT)"
+          for p in "$GITHUB_WORKSPACE"/.github/patch/*.patch; do patch --verbose -p 1 < "$p"; done
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
 
       - name: Update CA
         run: |
           sudo apt-get update && sudo apt-get install ca-certificates
           sudo update-ca-certificates
           cp -f /etc/ssl/certs/ca-certificates.crt core/src/foss/golang/clash/component/ca/ca-certificates.crt
-
-      - name: Prepare release metadata
-        id: release-meta
-        env:
-          RELEASE_TAG: ${{ inputs.release-tag }}
-          REPOSITORY: ${{ github.repository }}
-          RUN_ID: ${{ github.run_id }}
-        run: |
-          set -euo pipefail
-          CURRENT_SHA=$(git rev-parse HEAD)
-          NOTES_FILE="$RUNNER_TEMP/release-notes.md"
-
-          {
-            echo "Automated release build for \`$RELEASE_TAG\`."
-            echo
-            echo "- Commit: \`$CURRENT_SHA\`"
-            echo "- Workflow: https://github.com/$REPOSITORY/actions/runs/$RUN_ID"
-          } > "$NOTES_FILE"
-
-          echo "notes_file=$NOTES_FILE" >> "$GITHUB_OUTPUT"
 
       - name: Decrypt CI signing keystore
         env:
@@ -164,23 +206,83 @@ jobs:
         if: success()
         run: ./gradlew --no-daemon app:assembleMetaRelease
 
-      - name: Tag Repo
-        uses: richardsimko/update-tag@v1
-        with:
-          tag_name: ${{ inputs.release-tag }}
+      - name: Suffix APK names by kernel
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          KERNEL_ID: ${{ matrix.kernel.id }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          APK_DIR="app/build/outputs/apk/meta/release"
+          FILES=("$APK_DIR"/*.apk)
+
+          if [ ${#FILES[@]} -eq 0 ]; then
+            echo "No release APKs produced."
+            exit 1
+          fi
+
+          for f in "${FILES[@]}"; do
+            base=$(basename "$f")
+            mv "$f" "$APK_DIR/${base%.apk}-${KERNEL_ID}.apk"
+          done
+
+      - name: Upload Release Artifact
+        uses: actions/upload-artifact@v4
+        if: ${{ success() }}
+        with:
+          name: release-apk-${{ matrix.kernel.id }}
+          path: |
+            app/build/outputs/apk/meta/release/*-${{ matrix.kernel.id }}.apk
+
+  PublishRelease:
+    needs: [PrepareRelease, BuildRelease]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-apk-*
+          path: ${{ runner.temp }}/release-apks
+          merge-multiple: true
+
+      - name: Prepare release metadata
+        id: release-meta
+        env:
+          RELEASE_TAG: ${{ needs.PrepareRelease.outputs.release_tag }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          NOTES_FILE="$RUNNER_TEMP/release-notes.md"
+
+          {
+            echo "Automated dual-kernel release build for \`$RELEASE_TAG\`."
+            echo
+            echo "- Workflow: https://github.com/$REPOSITORY/actions/runs/$RUN_ID"
+            echo "- Kernels: \`alpha\`, \`persistent-pin\`"
+            echo
+            echo "### Artifacts"
+            find "$RUNNER_TEMP/release-apks" -maxdepth 1 -type f -name '*.apk' -printf -- "- %f\n" | sort
+          } > "$NOTES_FILE"
+
+          echo "notes_file=$NOTES_FILE" >> "$GITHUB_OUTPUT"
 
       - name: Publish release
-        if: ${{ success() }}
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.release-tag }}
+          RELEASE_TAG: ${{ needs.PrepareRelease.outputs.release_tag }}
           NOTES_FILE: ${{ steps.release-meta.outputs.notes_file }}
         run: |
           set -euo pipefail
+          shopt -s nullglob
+          APK_FILES=("$RUNNER_TEMP"/release-apks/*.apk)
+
+          if [ ${#APK_FILES[@]} -eq 0 ]; then
+            echo "No APK files found to publish."
+            exit 1
+          fi
+
           gh release create "$RELEASE_TAG" \
-            app/build/outputs/apk/meta/release/*.apk \
+            "${APK_FILES[@]}" \
             --verify-tag \
             --title "$RELEASE_TAG" \
             --notes-file "$NOTES_FILE" \
