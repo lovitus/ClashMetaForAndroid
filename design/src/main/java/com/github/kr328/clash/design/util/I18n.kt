@@ -33,7 +33,12 @@ fun Provider.type(context: Context): String {
         Provider.VehicleType.Compatible -> context.getString(R.string.compatible)
     }
 
-    return context.getString(R.string.format_provider_type, type, vehicle)
+    val countSummary = when (this.type) {
+        Provider.Type.Proxy -> context.getString(R.string.format_provider_proxy_count, count)
+        Provider.Type.Rule -> context.getString(R.string.format_provider_rule_count, count)
+    }
+
+    return context.getString(R.string.format_provider_type_with_count, type, vehicle, countSummary)
 }
 
 @JvmOverloads

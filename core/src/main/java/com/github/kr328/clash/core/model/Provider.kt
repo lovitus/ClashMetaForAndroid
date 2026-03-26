@@ -10,6 +10,7 @@ data class Provider(
     val name: String,
     val type: Type,
     val vehicleType: VehicleType,
+    val count: Int = 0,
     val updatedAt: Long
 ) : Parcelable, Comparable<Provider> {
     enum class Type {

@@ -16,6 +16,7 @@ type Provider struct {
 	Name        string `json:"name"`
 	VehicleType string `json:"vehicleType"`
 	Type        string `json:"type"`
+	Count       int    `json:"count"`
 	UpdatedAt   int64  `json:"updatedAt"`
 }
 
@@ -49,15 +50,23 @@ func QueryProviders() []*Provider {
 
 	for _, p := range providers {
 		updatedAt := time.Time{}
+		count := 0
 
 		if s, ok := p.(UpdatableProvider); ok {
 			updatedAt = s.UpdatedAt()
+		}
+		switch provider := p.(type) {
+		case provider.ProxyProvider:
+			count = provider.Count()
+		case provider.RuleProvider:
+			count = provider.Count()
 		}
 
 		result = append(result, &Provider{
 			Name:        p.Name(),
 			VehicleType: p.VehicleType().String(),
 			Type:        p.Type().String(),
+			Count:       count,
 			UpdatedAt:   updatedAt.UnixNano() / 1000 / 1000,
 		})
 	}

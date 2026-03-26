@@ -155,6 +155,29 @@ jobs:
             git ls-tree --name-only -r "$SHA" > "$FILES_FILE"
           fi
 
+          CN_CHANGES_FILE="$RUNNER_TEMP/current-changes-zh.md"
+          : > "$CN_CHANGES_FILE"
+
+          if grep -q '^core/src/main/golang/native/tunnel/proxies.go$' "$FILES_FILE" || \
+             grep -q '^design/src/main/java/com/github/kr328/clash/design/component/ProxyViewState.kt$' "$FILES_FILE"; then
+            echo "- 代理组刷新稳定性修复：减少无变化数据导致的列表闪烁，保持选择/固定状态显示一致。" >> "$CN_CHANGES_FILE"
+          fi
+
+          if grep -q '^core/src/main/golang/native/tunnel/providers.go$' "$FILES_FILE" || \
+             grep -q '^core/src/main/java/com/github/kr328/clash/core/model/Provider.kt$' "$FILES_FILE" || \
+             grep -q '^design/src/main/java/com/github/kr328/clash/design/util/I18n.kt$' "$FILES_FILE"; then
+            echo "- Providers 页面增强：显示 Proxy Provider 节点数量与 Rule Provider 规则数量（使用内核现成 Count 数据）。" >> "$CN_CHANGES_FILE"
+          fi
+
+          if grep -q '^design/src/main/res/layout/design_proxy.xml$' "$FILES_FILE"; then
+            echo "- 代理页顶部操作按钮图标语义优化：清空过滤 / 全部折叠图标映射更直观。" >> "$CN_CHANGES_FILE"
+          fi
+
+          if grep -q '^.github/workflows/build-debug.yaml$' "$FILES_FILE" || \
+             grep -q '^.github/workflows/build-pre-release.yaml$' "$FILES_FILE"; then
+            echo "- 构建与发布信息优化：Release 标题按时间前缀命名，排序更清晰。" >> "$CN_CHANGES_FILE"
+          fi
+
           sed -i 's|^|- `|; s|$|`|' "$FILES_FILE"
 
           {
@@ -172,6 +195,13 @@ jobs:
             echo "- mihomo 基线分支(.gitmodules): \`$MIHOMO_BASE_BRANCH\`"
             echo "- mihomo 子模块提交: \`$MIHOMO_SHA\`"
             echo "- mihomo 提交是否在基线分支内: \`$MIHOMO_IN_BASE\`"
+            echo
+            echo "### 本次实际改动（中文）"
+            if [ -s "$CN_CHANGES_FILE" ]; then
+              cat "$CN_CHANGES_FILE"
+            else
+              echo "- 本次提交未命中预设改动摘要规则，请参考下方提交记录与改动文件列表。"
+            fi
             echo
             echo "### 最近提交（最多 15 条）"
             if [ -s "$COMMITS_FILE" ]; then

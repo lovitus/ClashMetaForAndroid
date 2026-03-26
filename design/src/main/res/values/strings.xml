@@ -291,6 +291,9 @@
     <string name="delay_test">Delay Test</string>
 
     <string name="format_provider_type">%1$s(%2$s)</string>
+    <string name="format_provider_type_with_count">%1$s(%2$s) · %3$s</string>
+    <string name="format_provider_proxy_count">%d nodes</string>
+    <string name="format_provider_rule_count">%d rules</string>
     <string name="rule">Rule</string>
     <string name="http">HTTP</string>
     <string name="inline">Inline</string>

@@ -87,7 +87,7 @@
                     android:minWidth="0dp"
                     android:onClick="@{() -> self.clearAllFilters()}"
                     android:text="@string/proxy_clear_all_filters"
-                    app:icon="@drawable/ic_baseline_clear_all"
+                    app:icon="@drawable/ic_baseline_close"
                     app:iconGravity="textStart"
                     app:iconPadding="@dimen/proxy_header_action_icon_padding" />
 
@@ -99,7 +99,7 @@
                     android:minWidth="0dp"
                     android:onClick="@{() -> self.collapseAllGroups()}"
                     android:text="@string/collapse_all"
-                    app:icon="@drawable/ic_baseline_hide"
+                    app:icon="@drawable/ic_baseline_clear_all"
                     app:iconGravity="textStart"
                     app:iconPadding="@dimen/proxy_header_action_icon_padding" />
             </LinearLayout>
