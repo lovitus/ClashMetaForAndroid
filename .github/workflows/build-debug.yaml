@@ -32,6 +32,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
       
       - name: Checkout submodules
         run: git submodule update --init --recursive --force
@@ -138,7 +140,20 @@ jobs:
           fi
 
           git log --no-merges -n 15 --pretty=format:'- `%h` %s' > "$COMMITS_FILE"
-          git show --name-only --pretty=format: "$SHA" | sed '/^$/d' | sed 's/^/- `&`/' > "$FILES_FILE"
+
+          # In shallow clones, parent commit may be missing and cause file list inflation.
+          if ! git cat-file -e "${SHA}^" 2>/dev/null; then
+            git fetch --no-tags --depth=2 origin "$REF_NAME" || true
+          fi
+
+          if git cat-file -e "${SHA}^" 2>/dev/null; then
+            git diff --name-only "${SHA}^" "$SHA" > "$FILES_FILE"
+          else
+            # Fallback for true root commits where parent does not exist.
+            git ls-tree --name-only -r "$SHA" > "$FILES_FILE"
+          fi
+
+          sed -i 's/^/- `&`/' "$FILES_FILE"
 
           {
             echo "## 调试版本说明 (Debug Build)"
