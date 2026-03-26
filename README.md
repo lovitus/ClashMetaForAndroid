@@ -68,6 +68,13 @@ APP package name is `com.github.metacubex.clash.meta`
 - Import a profile
   - URL Scheme `clash://install-config?url=<encoded URI>` or `clashmeta://install-config?url=<encoded URI>`
 
+### Fork Docs
+
+This fork uses a dual-kernel unified build workflow. See:
+
+- [KERNEL_UPDATE_GUIDE_内核更新指南.md](KERNEL_UPDATE_GUIDE_内核更新指南.md)
+- [DUAL_KERNEL_UNIFIED_BUILD_双内核统一构建.md](DUAL_KERNEL_UNIFIED_BUILD_双内核统一构建.md)
+
 ### Contribution and Project Maintenance
 
 #### Meta Kernel
@@ -78,6 +85,7 @@ APP package name is `com.github.metacubex.clash.meta`
 
 #### Maintenance
 
+- This fork uses manual guarded dependency update workflow. See `KERNEL_UPDATE_GUIDE_内核更新指南.md`.
 - When `MetaCubeX/Clash.Meta` kernel is updated to a new version, the `Update Dependencies` actions in this repo will be triggered automatically.
   - It will pull the new version of the meta kernel, update all the golang dependencies, and create a PR without manual intervention.
   - If there is any compile error in PR, you need to fix it before merging. Alternatively, you may merge the PR directly.
