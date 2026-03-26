@@ -14,6 +14,7 @@ import com.github.kr328.clash.design.component.ProxyViewState
 import com.github.kr328.clash.design.databinding.AdapterProxyGroupBinding
 import com.github.kr328.clash.design.model.ProxyState
 import com.github.kr328.clash.design.store.UiStore
+import com.github.kr328.clash.design.util.getPixels
 import com.github.kr328.clash.design.util.invalidateChildren
 import com.github.kr328.clash.design.util.layoutInflater
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -255,6 +256,14 @@ class ProxyGroupAdapter(
     private fun bindGroupHolder(holder: GroupHolder, groupIndex: Int) {
         val group = groups[groupIndex]
         val binding = holder.binding
+        val topSpacing = if (groupIndex == 0) 0 else context.getPixels(R.dimen.proxy_group_spacing)
+
+        (holder.itemView.layoutParams as? RecyclerView.LayoutParams)?.let { params ->
+            if (params.topMargin != topSpacing) {
+                params.topMargin = topSpacing
+                holder.itemView.layoutParams = params
+            }
+        }
 
         binding.groupTitleView.text = group.name
         binding.groupSubtitleView.text = buildGroupSubtitle(group)

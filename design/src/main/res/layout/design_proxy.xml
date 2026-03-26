@@ -78,23 +78,30 @@
                 android:paddingStart="@dimen/item_header_margin"
                 android:paddingEnd="@dimen/item_header_margin">
 
-                <Button
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/clear_filters_view"
-                    style="@style/Widget.MaterialComponents.Button.TextButton"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginEnd="@dimen/proxy_header_action_spacing"
                     android:minWidth="0dp"
                     android:onClick="@{() -> self.clearAllFilters()}"
-                    android:text="@string/proxy_clear_all_filters" />
+                    android:text="@string/proxy_clear_all_filters"
+                    app:icon="@drawable/ic_baseline_clear_all"
+                    app:iconGravity="textStart"
+                    app:iconPadding="@dimen/proxy_header_action_icon_padding" />
 
-                <Button
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/collapse_all_view"
-                    style="@style/Widget.MaterialComponents.Button.TextButton"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:minWidth="0dp"
                     android:onClick="@{() -> self.collapseAllGroups()}"
-                    android:text="@string/collapse_all" />
+                    android:text="@string/collapse_all"
+                    app:icon="@drawable/ic_baseline_hide"
+                    app:iconGravity="textStart"
+                    app:iconPadding="@dimen/proxy_header_action_icon_padding" />
             </LinearLayout>
 
             <View
