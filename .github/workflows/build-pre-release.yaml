@@ -116,8 +116,10 @@ jobs:
             SAFE_REF="run-$RUN_ID"
           fi
           SHORT_SHA=$(printf '%s' "$SHA" | cut -c1-8)
-          TAG_NAME="prerelease-alpha-$SAFE_REF-$KERNEL_ID-$SHORT_SHA-r$RUN_ID"
-          RELEASE_NAME="Prerelease Alpha ($REF_NAME / $KERNEL_LABEL) [$SHORT_SHA / run $RUN_ID]"
+          BUILD_TS=$(date -u +%Y%m%d-%H%M%S)
+          BUILD_TIME_ISO=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          TAG_NAME="prerelease-alpha-$BUILD_TS-$SAFE_REF-$KERNEL_ID-$SHORT_SHA-r$RUN_ID"
+          RELEASE_NAME="$BUILD_TS Prerelease Alpha ($REF_NAME / $KERNEL_LABEL) [$SHORT_SHA / run $RUN_ID]"
 
           CURRENT_SHA=$(git rev-parse HEAD)
           NOTES_FILE="$RUNNER_TEMP/prerelease-notes.md"
@@ -127,6 +129,7 @@ jobs:
             echo "Automated pre-release build for \`$REF_NAME\`."
             echo
             echo "- Commit: \`$CURRENT_SHA\`"
+            echo "- Build time (UTC): \`$BUILD_TIME_ISO\`"
             echo "- Kernel: \`$KERNEL_ID ($KERNEL_LABEL)\`"
             echo "- Kernel source: \`$KERNEL_SOURCE\`"
             echo "- mihomo commit: \`$MIHOMO_SHA\`"

@@ -251,6 +251,61 @@ func isGroupHidden(group outboundgroup.ProxyGroup) bool {
 	return meta.Hidden
 }
 
+func pickDelayTestURL(histories map[string]C.ProxyState) string {
+	if len(histories) == 0 {
+		return C.DefaultTestURL
+	}
+
+	urls := make([]string, 0, len(histories))
+	hasDefault := false
+
+	for url := range histories {
+		if len(url) == 0 {
+			continue
+		}
+
+		urls = append(urls, url)
+
+		if url == C.DefaultTestURL {
+			hasDefault = true
+		}
+	}
+
+	if len(urls) == 0 {
+		return C.DefaultTestURL
+	}
+
+	sort.Strings(urls)
+
+	bestURL := ""
+	bestTimestamp := int64(-1)
+	hasTimedHistory := false
+
+	for _, url := range urls {
+		history := histories[url].History
+		if len(history) == 0 {
+			continue
+		}
+
+		ts := history[len(history)-1].Time.UnixNano()
+		if !hasTimedHistory || ts > bestTimestamp {
+			bestTimestamp = ts
+			bestURL = url
+			hasTimedHistory = true
+		}
+	}
+
+	if hasTimedHistory {
+		return bestURL
+	}
+
+	if hasDefault {
+		return C.DefaultTestURL
+	}
+
+	return urls[0]
+}
+
 func convertProxies(proxies []C.Proxy, uiSubtitlePattern *regexp2.Regexp) []*Proxy {
 	result := make([]*Proxy, 0, 128)
 
@@ -269,13 +324,7 @@ func convertProxies(proxies []C.Proxy, uiSubtitlePattern *regexp2.Regexp) []*Pro
 				}
 			}
 		}
-		testURL := "https://www.gstatic.com/generate_204"
-		for k := range p.ExtraDelayHistories() {
-			if len(k) > 0 {
-				testURL = k
-				break
-			}
-		}
+		testURL := pickDelayTestURL(p.ExtraDelayHistories())
 
 		result = append(result, &Proxy{
 			Name:     name,
@@ -308,13 +357,7 @@ func collectProviders(providers []provider.ProxyProvider, uiSubtitlePattern *reg
 				}
 			}
 
-			testURL := "https://www.gstatic.com/generate_204"
-			for k := range px.ExtraDelayHistories() {
-				if len(k) > 0 {
-					testURL = k
-					break
-				}
-			}
+			testURL := pickDelayTestURL(px.ExtraDelayHistories())
 
 			result = append(result, &Proxy{
 				Name:     name,

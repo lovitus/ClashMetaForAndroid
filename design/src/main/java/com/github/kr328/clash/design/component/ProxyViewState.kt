@@ -74,7 +74,7 @@ class ProxyViewState(
             delayText = if (proxy.delay in 0..Short.MAX_VALUE) proxy.delay.toString() else ""
         }
 
-        if (parentNow !== parent.now) {
+        if (parentNow != parent.now) {
             parentNow = parent.now
             selected = proxy.name == parent.now
         }

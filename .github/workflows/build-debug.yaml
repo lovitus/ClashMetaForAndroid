@@ -121,6 +121,8 @@ jobs:
             SAFE_REF="run-$RUN_ID"
           fi
           SHORT_SHA=$(printf '%s' "$SHA" | cut -c1-8)
+          BUILD_TS=$(date -u +%Y%m%d-%H%M%S)
+          BUILD_TIME_ISO=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           NOTES_FILE="$RUNNER_TEMP/release-notes.md"
           COMMITS_FILE="$RUNNER_TEMP/recent-commits.md"
           FILES_FILE="$RUNNER_TEMP/current-files.md"
@@ -163,6 +165,7 @@ jobs:
             echo "### 构建信息"
             echo "- 分支: \`$REF_NAME\`"
             echo "- 提交: \`$SHA\`"
+            echo "- 构建时间(UTC): \`$BUILD_TIME_ISO\`"
             echo "- 内核档位: \`$KERNEL_ID ($KERNEL_LABEL)\`"
             echo "- 内核来源: \`$KERNEL_SOURCE\`"
             echo "- Workflow: https://github.com/$REPOSITORY/actions/runs/$RUN_ID"
@@ -185,8 +188,8 @@ jobs:
             fi
           } > "$NOTES_FILE"
 
-          echo "tag_name=debug-alpha-$SAFE_REF-$KERNEL_ID-$SHORT_SHA-r$RUN_ID" >> "$GITHUB_OUTPUT"
-          echo "release_name=Debug Alpha 调试版本 ($REF_NAME / $KERNEL_LABEL) [$SHORT_SHA / run $RUN_ID]" >> "$GITHUB_OUTPUT"
+          echo "tag_name=debug-alpha-$BUILD_TS-$SAFE_REF-$KERNEL_ID-$SHORT_SHA-r$RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "release_name=$BUILD_TS Debug Alpha 调试版本 ($REF_NAME / $KERNEL_LABEL) [$SHORT_SHA / run $RUN_ID]" >> "$GITHUB_OUTPUT"
           echo "notes_file=$NOTES_FILE" >> "$GITHUB_OUTPUT"
 
       - name: Decrypt CI debug keystore
