@@ -4,6 +4,7 @@ import android.content.Context
 import android.widget.EditText
 import android.view.ViewGroup
 import android.view.View
+import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.github.kr328.clash.core.model.Proxy
 import com.github.kr328.clash.design.R
@@ -41,6 +42,8 @@ class ProxyGroupAdapter(
         var fixable: Boolean = false,
         var expanded: Boolean = true,
         var urlTesting: Boolean = false,
+        var lastParentNow: String = "?",
+        var lastFixedNow: String = "",
     )
 
     private sealed class Item {
@@ -51,7 +54,13 @@ class ProxyGroupAdapter(
     class GroupHolder(val binding: AdapterProxyGroupBinding) : RecyclerView.ViewHolder(binding.root)
     class ProxyHolder(val view: ProxyView) : RecyclerView.ViewHolder(view)
 
-    private val groups = groupNames.map { GroupState(it, filterKeyword = uiStore.getProxyGroupFilter(it)) }
+    private val groups = groupNames.map {
+        GroupState(
+            name = it,
+            filterKeyword = uiStore.getProxyGroupFilter(it),
+            expanded = uiStore.isProxyGroupExpanded(it),
+        )
+    }
     private var items = rebuildItems()
     private var recyclerView: RecyclerView? = null
 
@@ -126,6 +135,14 @@ class ProxyGroupAdapter(
         val group = groups[position]
         val oldProxyCount = group.proxies.size
         val oldExpanded = group.expanded
+        val oldType = group.type
+        val oldAllProxies = group.allProxies
+        val oldLinks = group.links
+        val oldSelectable = group.selectable
+        val oldFixable = group.fixable
+        val oldUrlTesting = group.urlTesting
+        val oldParentNow = group.lastParentNow
+        val oldFixedNow = group.lastFixedNow
 
         group.type = type
         group.parent = parent
@@ -135,6 +152,21 @@ class ProxyGroupAdapter(
         group.urlTesting = false
         group.allProxies = proxies
         group.links = links
+        group.lastParentNow = parent.now
+        group.lastFixedNow = fixed
+
+        val shouldRefresh = oldType != group.type ||
+            oldAllProxies != group.allProxies ||
+            oldLinks != group.links ||
+            oldSelectable != group.selectable ||
+            oldFixable != group.fixable ||
+            oldUrlTesting != group.urlTesting ||
+            oldParentNow != group.lastParentNow ||
+            oldFixedNow != group.lastFixedNow
+
+        if (!shouldRefresh) {
+            return
+        }
 
         rebuildGroupProxies(group)
         notifyGroupContentChanged(position, oldProxyCount, group.proxies.size, oldExpanded && group.expanded)
@@ -157,6 +189,33 @@ class ProxyGroupAdapter(
         notifyGroupHeaderChanged(position)
     }
 
+    fun visibleGroupIndices(): IntArray {
+        val recyclerView = recyclerView ?: return IntArray(0)
+        val layoutManager = recyclerView.layoutManager as? LinearLayoutManager ?: return IntArray(0)
+        val first = layoutManager.findFirstVisibleItemPosition()
+        val last = layoutManager.findLastVisibleItemPosition()
+
+        if (first == RecyclerView.NO_POSITION || last == RecyclerView.NO_POSITION || items.isEmpty()) {
+            return IntArray(0)
+        }
+
+        val from = first.coerceIn(0, items.lastIndex)
+        val to = last.coerceIn(0, items.lastIndex)
+        if (from > to) {
+            return IntArray(0)
+        }
+
+        val groupIndices = LinkedHashSet<Int>()
+        for (position in from..to) {
+            when (val item = items[position]) {
+                is Item.Header -> groupIndices.add(item.groupIndex)
+                is Item.ProxyNode -> groupIndices.add(item.groupIndex)
+            }
+        }
+
+        return groupIndices.toIntArray()
+    }
+
     fun collapseAll() {
         if (groups.none { it.expanded }) {
             return
@@ -164,6 +223,7 @@ class ProxyGroupAdapter(
 
         groups.forEach {
             it.expanded = false
+            uiStore.setProxyGroupExpanded(it.name, false)
         }
 
         rebuildAndNotify()
@@ -223,6 +283,7 @@ class ProxyGroupAdapter(
         binding.root.setOnClickListener {
             groupInteracted(groupIndex)
             group.expanded = !group.expanded
+            uiStore.setProxyGroupExpanded(group.name, group.expanded)
             rebuildAndNotify()
         }
 

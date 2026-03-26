@@ -84,15 +84,17 @@ class ProxyDesign(
     ) {
         withContext(Dispatchers.Main) {
             adapter.updateGroup(position, type, proxies, parent, links, fixed)
-            adapter.requestRedrawVisible()
         }
     }
 
     suspend fun updateSelection(position: Int) {
         withContext(Dispatchers.Main) {
             adapter.updateSelection(position)
-            adapter.requestRedrawVisible()
         }
+    }
+
+    fun visibleGroupIndices(): IntArray {
+        return adapter.visibleGroupIndices()
     }
 
     suspend fun requestRedrawVisible() {

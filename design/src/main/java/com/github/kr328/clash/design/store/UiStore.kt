@@ -67,6 +67,11 @@ class UiStore(context: Context) {
         defaultValue = "{}"
     )
 
+    private var proxyGroupExpandedRaw: String by store.string(
+        key = "proxy_group_expanded",
+        defaultValue = "{}"
+    )
+
     var accessControlSort: AppInfoSort by store.enum(
         key = "access_control_sort",
         defaultValue = AppInfoSort.Label,
@@ -104,6 +109,22 @@ class UiStore(context: Context) {
         proxyGroupFiltersRaw = "{}"
     }
 
+    fun isProxyGroupExpanded(groupName: String): Boolean {
+        return readProxyGroupExpandedStates()[groupName] ?: true
+    }
+
+    fun setProxyGroupExpanded(groupName: String, expanded: Boolean) {
+        val states = readProxyGroupExpandedStates()
+
+        if (expanded) {
+            states.remove(groupName)
+        } else {
+            states[groupName] = false
+        }
+
+        writeProxyGroupExpandedStates(states)
+    }
+
     private fun readProxyGroupFilters(): MutableMap<String, String> {
         return runCatching {
             val json = JSONObject(proxyGroupFiltersRaw)
@@ -130,6 +151,32 @@ class UiStore(context: Context) {
         }
 
         proxyGroupFiltersRaw = json.toString()
+    }
+
+    private fun readProxyGroupExpandedStates(): MutableMap<String, Boolean> {
+        return runCatching {
+            val json = JSONObject(proxyGroupExpandedRaw)
+            buildMap {
+                val keys = json.keys()
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    if (!json.optBoolean(key, true)) {
+                        put(key, false)
+                    }
+                }
+            }.toMutableMap()
+        }.getOrDefault(mutableMapOf())
+    }
+
+    private fun writeProxyGroupExpandedStates(states: Map<String, Boolean>) {
+        val json = JSONObject()
+        states.forEach { (name, expanded) ->
+            if (!expanded) {
+                json.put(name, false)
+            }
+        }
+
+        proxyGroupExpandedRaw = json.toString()
     }
 
     companion object {

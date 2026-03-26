@@ -28,6 +28,7 @@ class ProxyActivity : BaseActivity<ProxyDesign>() {
         val reloadVersions = IntArray(names.size)
         var shouldRestoreGlobalSelection =
             mode == TunnelState.Mode.Global && uiStore.proxyGlobalLastSelection.isNotBlank()
+        var lastFullRefreshAt = System.currentTimeMillis()
 
         val design = ProxyDesign(
             this,
@@ -59,8 +60,26 @@ class ProxyActivity : BaseActivity<ProxyDesign>() {
                     }
                 }
                 onTimeout(AUTO_REFRESH_INTERVAL) {
-                    names.indices.forEach { idx ->
-                        design.requests.trySend(ProxyDesign.Request.Reload(idx))
+                    val visible = design.visibleGroupIndices().toSet()
+
+                    if (visible.isEmpty()) {
+                        names.indices.forEach { idx ->
+                            design.requests.trySend(ProxyDesign.Request.Reload(idx))
+                        }
+                    } else {
+                        visible.forEach { idx ->
+                            design.requests.trySend(ProxyDesign.Request.Reload(idx))
+                        }
+                    }
+
+                    val now = System.currentTimeMillis()
+                    if (now - lastFullRefreshAt >= FULL_REFRESH_INTERVAL) {
+                        names.indices.forEach { idx ->
+                            if (idx !in visible) {
+                                design.requests.trySend(ProxyDesign.Request.Reload(idx))
+                            }
+                        }
+                        lastFullRefreshAt = now
                     }
                 }
                 design.requests.onReceive {
@@ -205,5 +224,6 @@ class ProxyActivity : BaseActivity<ProxyDesign>() {
 
     companion object {
         private const val AUTO_REFRESH_INTERVAL = 5_000L
+        private const val FULL_REFRESH_INTERVAL = 30_000L
     }
 }
