@@ -28,7 +28,8 @@ class ProxyActivity : BaseActivity<ProxyDesign>() {
         val reloadVersions = IntArray(names.size)
         var shouldRestoreGlobalSelection =
             mode == TunnelState.Mode.Global && uiStore.proxyGlobalLastSelection.isNotBlank()
-        var lastFullRefreshAt = System.currentTimeMillis()
+        var lastReloadAllAt = 0L
+        var pageForeground = activityStarted
 
         val design = ProxyDesign(
             this,
@@ -39,12 +40,25 @@ class ProxyActivity : BaseActivity<ProxyDesign>() {
 
         setContentDesign(design)
 
+        fun triggerReloadAll() {
+            lastReloadAllAt = System.currentTimeMillis()
+            names.indices.forEach { idx ->
+                design.requests.trySend(ProxyDesign.Request.Reload(idx))
+            }
+        }
+
         design.requests.send(ProxyDesign.Request.ReloadAll)
 
         while (isActive) {
             select<Unit> {
                 events.onReceive {
                     when (it) {
+                        Event.ActivityStart -> {
+                            pageForeground = true
+                        }
+                        Event.ActivityStop -> {
+                            pageForeground = false
+                        }
                         Event.ProfileLoaded -> {
                             val newNames = withClash {
                                 queryProxyGroupNames(uiStore.proxyExcludeNotSelectable)
@@ -59,27 +73,10 @@ class ProxyActivity : BaseActivity<ProxyDesign>() {
                         else -> Unit
                     }
                 }
-                onTimeout(AUTO_REFRESH_INTERVAL) {
-                    val visible = design.visibleGroupIndices().toSet()
-
-                    if (visible.isEmpty()) {
-                        names.indices.forEach { idx ->
-                            design.requests.trySend(ProxyDesign.Request.Reload(idx))
-                        }
-                    } else {
-                        visible.forEach { idx ->
-                            design.requests.trySend(ProxyDesign.Request.Reload(idx))
-                        }
-                    }
-
+                onTimeout(REFRESH_CHECK_INTERVAL) {
                     val now = System.currentTimeMillis()
-                    if (now - lastFullRefreshAt >= FULL_REFRESH_INTERVAL) {
-                        names.indices.forEach { idx ->
-                            if (idx !in visible) {
-                                design.requests.trySend(ProxyDesign.Request.Reload(idx))
-                            }
-                        }
-                        lastFullRefreshAt = now
+                    if (pageForeground && now - lastReloadAllAt >= AUTO_REFRESH_INTERVAL) {
+                        design.requests.trySend(ProxyDesign.Request.ReloadAll)
                     }
                 }
                 design.requests.onReceive {
@@ -90,9 +87,7 @@ class ProxyActivity : BaseActivity<ProxyDesign>() {
                             finish()
                         }
                         ProxyDesign.Request.ReloadAll -> {
-                            names.indices.forEach { idx ->
-                                design.requests.trySend(ProxyDesign.Request.Reload(idx))
-                            }
+                            triggerReloadAll()
                         }
                         is ProxyDesign.Request.Reload -> {
                             val version = ++reloadVersions[it.index]
@@ -180,8 +175,12 @@ class ProxyActivity : BaseActivity<ProxyDesign>() {
                         }
                         is ProxyDesign.Request.UrlTest -> {
                             launch {
-                                withClash {
-                                    healthCheck(names[it.index])
+                                try {
+                                    withClash {
+                                        healthCheck(names[it.index])
+                                    }
+                                } finally {
+                                    design.setUrlTesting(it.index, false)
                                 }
 
                                 design.requests.send(ProxyDesign.Request.Reload(it.index))
@@ -223,7 +222,7 @@ class ProxyActivity : BaseActivity<ProxyDesign>() {
     }
 
     companion object {
-        private const val AUTO_REFRESH_INTERVAL = 5_000L
-        private const val FULL_REFRESH_INTERVAL = 30_000L
+        private const val AUTO_REFRESH_INTERVAL = 10_000L
+        private const val REFRESH_CHECK_INTERVAL = 1_000L
     }
 }

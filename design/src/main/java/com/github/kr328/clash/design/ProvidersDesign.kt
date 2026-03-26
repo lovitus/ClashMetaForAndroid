@@ -37,9 +37,9 @@ class ProvidersDesign(
         }
     }
 
-    suspend fun notifyChanged(index: Int) {
+    suspend fun notifyChanged(index: Int, provider: Provider?) {
         withContext(Dispatchers.Main) {
-            adapter.notifyChanged(index)
+            adapter.notifyChanged(index, provider)
         }
     }
 
@@ -53,11 +53,13 @@ class ProvidersDesign(
     }
 
     fun requestUpdateAll() {
-        adapter.states.filter { !it.updating }.forEachIndexed { index, state ->
-            state.updating = true
-            if (state.provider.vehicleType != Provider.VehicleType.Inline) {
-                requests.trySend(Request.Update(index, state.provider))
+        adapter.states.forEachIndexed { index, state ->
+            if (state.updating || state.provider.vehicleType == Provider.VehicleType.Inline) {
+                return@forEachIndexed
             }
+
+            state.updating = true
+            requests.trySend(Request.Update(index, state.provider))
         }
     }
 }

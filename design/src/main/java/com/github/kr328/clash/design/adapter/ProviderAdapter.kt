@@ -33,10 +33,15 @@ class ProviderAdapter(
         notifyItemChanged(index)
     }
 
-    fun notifyChanged(index: Int) {
+    fun notifyChanged(index: Int, provider: Provider?) {
         states[index].apply {
             updating = false
-            updatedAt = System.currentTimeMillis()
+            if (provider != null) {
+                this.provider = provider
+                updatedAt = provider.updatedAt
+            } else {
+                updatedAt = System.currentTimeMillis()
+            }
         }
 
         notifyItemChanged(index)

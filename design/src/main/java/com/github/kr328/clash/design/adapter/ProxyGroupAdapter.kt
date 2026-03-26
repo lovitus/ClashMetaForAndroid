@@ -26,6 +26,7 @@ class ProxyGroupAdapter(
     private val uiStore: UiStore,
     groupNames: List<String>,
     private val groupInteracted: (Int) -> Unit,
+    private val groupExpanded: (Int) -> Unit,
     private val clicked: (Int, String) -> Unit,
     private val longClicked: (Int, Proxy, Boolean) -> Unit,
     private val urlTestClicked: (Int) -> Unit,
@@ -64,6 +65,21 @@ class ProxyGroupAdapter(
     }
     private var items = rebuildItems()
     private var recyclerView: RecyclerView? = null
+
+    private fun filteredProxies(group: GroupState): List<Proxy> {
+        val keyword = group.filterKeyword.trim()
+        val normalizedKeyword = keyword.lowercase(Locale.ROOT)
+
+        return if (normalizedKeyword.isBlank()) {
+            group.allProxies
+        } else {
+            group.allProxies.filter { proxy ->
+                proxy.name.lowercase(Locale.ROOT).contains(normalizedKeyword) ||
+                    proxy.title.lowercase(Locale.ROOT).contains(normalizedKeyword) ||
+                    proxy.subtitle.lowercase(Locale.ROOT).contains(normalizedKeyword)
+            }
+        }
+    }
 
     fun findHeaderPosition(groupName: String): Int? {
         val groupIndex = groups.indexOfFirst { it.name == groupName }
@@ -134,10 +150,10 @@ class ProxyGroupAdapter(
         fixed: String,
     ) {
         val group = groups[position]
+        val oldDisplayedProxies = group.proxies.map { it.proxy }
         val oldProxyCount = group.proxies.size
         val oldExpanded = group.expanded
         val oldType = group.type
-        val oldAllProxies = group.allProxies
         val oldLinks = group.links
         val oldSelectable = group.selectable
         val oldFixable = group.fixable
@@ -150,27 +166,41 @@ class ProxyGroupAdapter(
         group.fixed.now = fixed
         group.selectable = type == Proxy.Type.Selector
         group.fixable = type == Proxy.Type.URLTest || type == Proxy.Type.Fallback
-        group.urlTesting = false
         group.allProxies = proxies
         group.links = links
         group.lastParentNow = parent.now
         group.lastFixedNow = fixed
 
-        val shouldRefresh = oldType != group.type ||
-            oldAllProxies != group.allProxies ||
+        val newDisplayedProxies = filteredProxies(group)
+        val proxyItemsChanged = oldDisplayedProxies != newDisplayedProxies ||
             oldLinks != group.links ||
             oldSelectable != group.selectable ||
             oldFixable != group.fixable ||
-            oldUrlTesting != group.urlTesting ||
             oldParentNow != group.lastParentNow ||
             oldFixedNow != group.lastFixedNow
 
-        if (!shouldRefresh) {
+        val headerChanged = oldType != group.type ||
+            oldFixable != group.fixable ||
+            oldUrlTesting != group.urlTesting ||
+            oldParentNow != group.lastParentNow ||
+            oldFixedNow != group.lastFixedNow ||
+            (group.filterKeyword.isNotBlank() && oldProxyCount != newDisplayedProxies.size)
+
+        if (!headerChanged && !proxyItemsChanged) {
             return
         }
 
-        rebuildGroupProxies(group)
-        notifyGroupContentChanged(position, oldProxyCount, group.proxies.size, oldExpanded && group.expanded)
+        if (proxyItemsChanged) {
+            rebuildGroupProxies(group, newDisplayedProxies)
+        }
+        notifyGroupContentChanged(
+            position,
+            oldProxyCount,
+            group.proxies.size,
+            oldExpanded && group.expanded,
+            headerChanged,
+            proxyItemsChanged
+        )
     }
 
     fun updateSelection(position: Int) {
@@ -294,6 +324,9 @@ class ProxyGroupAdapter(
             group.expanded = !group.expanded
             uiStore.setProxyGroupExpanded(group.name, group.expanded)
             rebuildAndNotify()
+            if (group.expanded) {
+                groupExpanded(groupIndex)
+            }
         }
 
         binding.urlTestView.setOnClickListener {
@@ -369,19 +402,7 @@ class ProxyGroupAdapter(
         return parts.joinToString(separator = " · ")
     }
 
-    private fun rebuildGroupProxies(group: GroupState) {
-        val keyword = group.filterKeyword.trim()
-        val normalizedKeyword = keyword.lowercase(Locale.ROOT)
-        val filtered = if (normalizedKeyword.isBlank()) {
-            group.allProxies
-        } else {
-            group.allProxies.filter { proxy ->
-                proxy.name.lowercase(Locale.ROOT).contains(normalizedKeyword) ||
-                    proxy.title.lowercase(Locale.ROOT).contains(normalizedKeyword) ||
-                    proxy.subtitle.lowercase(Locale.ROOT).contains(normalizedKeyword)
-            }
-        }
-
+    private fun rebuildGroupProxies(group: GroupState, filtered: List<Proxy> = filteredProxies(group)) {
         group.proxies = filtered.map { proxy ->
             val link = if (proxy.type.group) group.links[proxy.name] else null
             ProxyViewState(config, proxy, group.parent, link, group.fixed)
@@ -420,7 +441,14 @@ class ProxyGroupAdapter(
         val oldProxyCount = group.proxies.size
         val oldExpanded = group.expanded
         rebuildGroupProxies(group)
-        notifyGroupContentChanged(groupIndex, oldProxyCount, group.proxies.size, oldExpanded && group.expanded)
+        notifyGroupContentChanged(
+            groupIndex,
+            oldProxyCount,
+            group.proxies.size,
+            oldExpanded && group.expanded,
+            true,
+            true
+        )
     }
 
     private fun clearGroupFilter(groupIndex: Int) {
@@ -435,7 +463,14 @@ class ProxyGroupAdapter(
         group.filterKeyword = ""
         uiStore.setProxyGroupFilter(group.name, "")
         rebuildGroupProxies(group)
-        notifyGroupContentChanged(groupIndex, oldProxyCount, group.proxies.size, oldExpanded && group.expanded)
+        notifyGroupContentChanged(
+            groupIndex,
+            oldProxyCount,
+            group.proxies.size,
+            oldExpanded && group.expanded,
+            true,
+            true
+        )
     }
 
     private fun rebuildAndNotify() {
@@ -448,6 +483,8 @@ class ProxyGroupAdapter(
         oldProxyCount: Int,
         newProxyCount: Int,
         expanded: Boolean,
+        refreshHeader: Boolean,
+        refreshProxyItems: Boolean,
     ) {
         val oldItems = items
         val oldHeader = findHeaderPosition(oldItems, groupIndex) ?: run {
@@ -467,9 +504,11 @@ class ProxyGroupAdapter(
             return
         }
 
-        notifyItemChanged(newHeader)
+        if (refreshHeader) {
+            notifyItemChanged(newHeader)
+        }
 
-        if (!expanded) {
+        if (!expanded || !refreshProxyItems) {
             return
         }
 

@@ -39,23 +39,32 @@ class ProvidersActivity : BaseActivity<ProvidersDesign>() {
                 design.requests.onReceive {
                     when (it) {
                         is ProvidersDesign.Request.Update -> {
+                            val request = it
+
                             launch {
                                 try {
                                     withClash {
-                                        updateProvider(it.provider.type, it.provider.name)
+                                        updateProvider(request.provider.type, request.provider.name)
                                     }
 
-                                    design.notifyChanged(it.index)
+                                    val refreshed = withClash {
+                                        queryProviders().firstOrNull { provider ->
+                                            provider.type == request.provider.type &&
+                                                provider.name == request.provider.name
+                                        }
+                                    }
+
+                                    design.notifyChanged(request.index, refreshed)
                                 } catch (e: Exception) {
                                     design.showExceptionToast(
                                         getString(
                                             R.string.format_update_provider_failure,
-                                            it.provider.name,
+                                            request.provider.name,
                                             e.message
                                         )
                                     )
 
-                                    design.notifyUpdated(it.index)
+                                    design.notifyUpdated(request.index)
                                 }
                             }
                         }

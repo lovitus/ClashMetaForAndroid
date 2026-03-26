@@ -53,6 +53,9 @@ class ProxyDesign(
                 uiStore.proxyLastGroup = groupNames[index]
             }
         },
+        groupExpanded = { index ->
+            requests.trySend(Request.Reload(index))
+        },
         clicked = { index, name ->
             requests.trySend(Request.Select(index, name))
         },
@@ -106,6 +109,12 @@ class ProxyDesign(
     suspend fun showModeSwitchTips() {
         withContext(Dispatchers.Main) {
             android.widget.Toast.makeText(context, R.string.mode_switch_tips, android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
+
+    suspend fun setUrlTesting(index: Int, urlTesting: Boolean) {
+        withContext(Dispatchers.Main) {
+            adapter.setUrlTesting(index, urlTesting)
         }
     }
 
