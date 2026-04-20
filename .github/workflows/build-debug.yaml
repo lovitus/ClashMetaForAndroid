@@ -95,7 +95,7 @@ jobs:
           cd ..
           go mod tidy
 
-          cd ../main/golang
+          cd ../../main/golang
           go mod tidy
 
           for abi in arm64-v8a armeabi-v7a x86 x86_64; do
