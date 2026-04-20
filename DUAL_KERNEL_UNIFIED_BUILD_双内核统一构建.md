@@ -15,7 +15,7 @@
 - release branch: `persistent-pin-option-1.19.24merge`
 - resolved commit: `313230d95da4f28f9c23327709d7c91dcfc48919`
 - 说明: 当前 Android fork 的 `persistent-pin` 构建固定使用这条稳定发布线
-- 构建兼容层: kernel checkout 后会先执行一次 `go mod tidy`
+- 构建兼容层: kernel checkout 后会先对 `clash` 与 `core/src/foss/golang` 两层 module 执行 `go mod tidy`，再按 Android ABI 预解析 `cfa/native` 依赖图
 
 ## 3. Workflow Coverage / 覆盖的工作流
 

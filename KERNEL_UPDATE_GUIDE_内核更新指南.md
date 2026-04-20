@@ -33,13 +33,13 @@
 - release tag: `v2026.04.20-persistent-pin.5`
 - release branch: `persistent-pin-option-1.19.24merge`
 - resolved commit: `313230d95da4f28f9c23327709d7c91dcfc48919`
-- CI build normalization: checkout 后会在内核模块执行一次 `go mod tidy`
+- CI build normalization: checkout 后会对 `clash` 子模块与 `core/src/foss/golang` 入口模块分别执行一次 `go mod tidy`，再按 Android ABI 预解析 `cfa/native` 依赖图
 
 结论:
 - 只要 `PIN_KERNEL_REF` 不变，构建出来的 `pin` 内核就不会变。
 - `pin` 不是自动跟随。
 - `pin` 的固定来源可以和 `.gitmodules` 的默认 branch 不同，实际以 workflow 明确写死的 ref 为准。
-- 如果目标内核线在当前 Go 版本下存在 module 元数据漂移，CI 会先执行一次 `go mod tidy` 再进入 Android 外部 Go 构建。
+- 如果目标内核线在当前 Go 版本下存在 module 元数据漂移，CI 会先对 `clash` / `foss` 两层 module 做归一化，再按 Android ABI 对 `cfa/native` 执行 `go list -mod=mod -deps -tags foss,with_gvisor,cmfa` 预解析，避免在 Gradle 外部 Go 构建阶段才触发 `go.mod` 更新错误。
 
 ## 5. What `update-dependencies.yaml` Actually Does / `update-dependencies.yaml` 实际作用
 Workflow: `.github/workflows/update-dependencies.yaml`
