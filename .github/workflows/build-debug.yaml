@@ -85,6 +85,12 @@ jobs:
           go-version: "1.26"
           check-latest: true # Always check for the latest patch release
 
+      - name: Normalize kernel module metadata
+        run: |
+          set -euo pipefail
+          cd core/src/foss/golang/clash
+          go mod tidy
+
       - name: Apply Patches
         run: |
           cd $(go env GOROOT)
@@ -200,6 +206,7 @@ jobs:
             echo "- mihomo 基线分支(.gitmodules): \`$MIHOMO_BASE_BRANCH\`"
             echo "- mihomo 子模块提交: \`$MIHOMO_SHA\`"
             echo "- mihomo 提交是否在基线分支内: \`$MIHOMO_IN_BASE\`"
+            echo "- 构建前归一化: \`go mod tidy\` 已在内核模块中执行"
             echo
             echo "### Pin 内核发布线"
             echo "- pin release tag: \`$PIN_KERNEL_RELEASE_TAG\`"
