@@ -102,7 +102,9 @@ jobs:
             label: persistent-pin
             mode: pin
     env:
-      PIN_KERNEL_REF: 1101ff88f227c6575d010a0054b1ed5d31874d91
+      PIN_KERNEL_REF: 313230d95da4f28f9c23327709d7c91dcfc48919
+      PIN_KERNEL_RELEASE_TAG: v2026.04.20-persistent-pin.5
+      PIN_KERNEL_RELEASE_BRANCH: persistent-pin-option-1.19.24merge
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -250,6 +252,9 @@ jobs:
           RELEASE_TAG: ${{ needs.PrepareRelease.outputs.release_tag }}
           REPOSITORY: ${{ github.repository }}
           RUN_ID: ${{ github.run_id }}
+          PIN_KERNEL_REF: ${{ env.PIN_KERNEL_REF }}
+          PIN_KERNEL_RELEASE_TAG: ${{ env.PIN_KERNEL_RELEASE_TAG }}
+          PIN_KERNEL_RELEASE_BRANCH: ${{ env.PIN_KERNEL_RELEASE_BRANCH }}
         run: |
           set -euo pipefail
           NOTES_FILE="$RUNNER_TEMP/release-notes.md"
@@ -257,11 +262,24 @@ jobs:
           {
             echo "Automated dual-kernel release build for \`$RELEASE_TAG\`."
             echo
+            echo "### 发布概览"
             echo "- Workflow: https://github.com/$REPOSITORY/actions/runs/$RUN_ID"
             echo "- Kernels: \`alpha\`, \`persistent-pin\`"
             echo
+            echo "### 内核来源"
+            echo "- alpha: 构建时动态解析上游 \`origin/main\` 的子模块指针"
+            echo "- persistent-pin release tag: \`$PIN_KERNEL_RELEASE_TAG\`"
+            echo "- persistent-pin release branch: \`$PIN_KERNEL_RELEASE_BRANCH\`"
+            echo "- persistent-pin resolved commit: \`$PIN_KERNEL_REF\`"
+            echo "- 说明: 本仓库正式 release 保持一套应用代码，同时提供 \`alpha\` 与 \`persistent-pin\` 两套安装包。"
+            echo
             echo "### Artifacts"
             find "$RUNNER_TEMP/release-apks" -maxdepth 1 -type f -name '*.apk' -printf -- "- %f\n" | sort
+            echo
+            echo "### 中文说明"
+            echo "- 本次正式发布为双内核统一构建结果。"
+            echo "- \`alpha\` 面向上游同步验证。"
+            echo "- \`persistent-pin\` 固定到 \`$PIN_KERNEL_RELEASE_TAG\` 发布线，适用于自定义 pin 行为场景。"
           } > "$NOTES_FILE"
 
           echo "notes_file=$NOTES_FILE" >> "$GITHUB_OUTPUT"

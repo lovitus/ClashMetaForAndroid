@@ -1,4 +1,4 @@
-# Dual Kernel Unified Build / 双内核统一构建 (2026-03-26)
+# Dual Kernel Unified Build / 双内核统一构建 (2026-04-20)
 
 ## 1. Goal / 目标
 在同一套应用代码上，一次 CI 同时产出两套内核安装包:
@@ -9,6 +9,12 @@
 - 不新增第二个子模块。
 - 使用 workflow matrix 在构建阶段切换 `core/src/foss/golang/clash` 的 checkout commit。
 - 应用层代码、UI、配置逻辑保持一套。
+
+## 2.1 Current Pin Release Line / 当前 Pin 发布线
+- release tag: `v2026.04.20-persistent-pin.5`
+- release branch: `persistent-pin-option-1.19.24merge`
+- resolved commit: `313230d95da4f28f9c23327709d7c91dcfc48919`
+- 说明: 当前 Android fork 的 `persistent-pin` 构建固定使用这条稳定发布线
 
 ## 3. Workflow Coverage / 覆盖的工作流
 
@@ -44,6 +50,7 @@ About 页面显示:
 每次发版前建议确认:
 1. `alpha` 来源是否符合预期（上游 `origin/main` 当前指针）
 2. `pin` 的 `PIN_KERNEL_REF` 是否为目标 commit
+   - 如使用 release line，建议同时核对 tag / branch / resolved commit 三元组
 3. release 产物是否同时包含 `-alpha` 与 `-pin`
 4. About 页 core version 是否能区分两包
 

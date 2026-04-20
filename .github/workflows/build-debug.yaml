@@ -28,7 +28,9 @@ jobs:
             label: persistent-pin
             mode: pin
     env:
-      PIN_KERNEL_REF: 1101ff88f227c6575d010a0054b1ed5d31874d91
+      PIN_KERNEL_REF: 313230d95da4f28f9c23327709d7c91dcfc48919
+      PIN_KERNEL_RELEASE_TAG: v2026.04.20-persistent-pin.5
+      PIN_KERNEL_RELEASE_BRANCH: persistent-pin-option-1.19.24merge
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -114,6 +116,9 @@ jobs:
           KERNEL_ID: ${{ matrix.kernel.id }}
           KERNEL_LABEL: ${{ matrix.kernel.label }}
           KERNEL_SOURCE: ${{ steps.kernel-ref.outputs.kernel_source }}
+          PIN_KERNEL_REF: ${{ env.PIN_KERNEL_REF }}
+          PIN_KERNEL_RELEASE_TAG: ${{ env.PIN_KERNEL_RELEASE_TAG }}
+          PIN_KERNEL_RELEASE_BRANCH: ${{ env.PIN_KERNEL_RELEASE_BRANCH }}
         run: |
           set -euo pipefail
           SAFE_REF=$(printf '%s' "$REF_NAME" | tr '/ ' '-' | tr -cd '[:alnum:]._-')
@@ -196,11 +201,19 @@ jobs:
             echo "- mihomo 子模块提交: \`$MIHOMO_SHA\`"
             echo "- mihomo 提交是否在基线分支内: \`$MIHOMO_IN_BASE\`"
             echo
+            echo "### Pin 内核发布线"
+            echo "- pin release tag: \`$PIN_KERNEL_RELEASE_TAG\`"
+            echo "- pin release branch: \`$PIN_KERNEL_RELEASE_BRANCH\`"
+            echo "- pin resolved commit: \`$PIN_KERNEL_REF\`"
+            echo
             echo "### 本次实际改动（中文）"
             if [ -s "$CN_CHANGES_FILE" ]; then
               cat "$CN_CHANGES_FILE"
             else
               echo "- 本次提交未命中预设改动摘要规则，请参考下方提交记录与改动文件列表。"
+            fi
+            if [ "$KERNEL_ID" = "pin" ]; then
+              echo "- 本次 \`persistent-pin\` 调试构建固定到 \`$PIN_KERNEL_RELEASE_TAG\` 发布线，便于验证自定义 pin 行为。"
             fi
             echo
             echo "### 最近提交（最多 15 条）"
