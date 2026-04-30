@@ -215,7 +215,7 @@ jobs:
 
       - name: Build
         if: success()
-        run: ./gradlew --no-daemon app:assembleMetaRelease
+        run: ./gradlew --no-daemon app:assembleAlphaRelease app:assembleMetaRelease
 
       - name: Suffix APK names by kernel
         env:
@@ -223,8 +223,15 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
-          APK_DIR="app/build/outputs/apk/meta/release"
-          FILES=("$APK_DIR"/*.apk)
+          APK_DIRS=(
+            "app/build/outputs/apk/alpha/release"
+            "app/build/outputs/apk/meta/release"
+          )
+          FILES=()
+
+          for apk_dir in "${APK_DIRS[@]}"; do
+            FILES+=("$apk_dir"/*.apk)
+          done
 
           if [ ${#FILES[@]} -eq 0 ]; then
             echo "No debug APKs produced."
@@ -233,7 +240,7 @@ jobs:
 
           for f in "${FILES[@]}"; do
             base=$(basename "$f")
-            mv "$f" "$APK_DIR/${base%.apk}-${KERNEL_ID}.apk"
+            mv "$f" "$(dirname "$f")/${base%.apk}-${KERNEL_ID}.apk"
           done
 
       - name: Upload Debug APK Artifact
@@ -242,6 +249,7 @@ jobs:
         with:
           name: debug-apk-${{ matrix.kernel.id }}
           path: |
+            app/build/outputs/apk/alpha/release/*-${{ matrix.kernel.id }}.apk
             app/build/outputs/apk/meta/release/*-${{ matrix.kernel.id }}.apk
 
       - name: Upload Debug Metadata Artifact
@@ -301,9 +309,10 @@ jobs:
             echo "- 提交: \`$SHA\`"
             echo "- 构建时间(UTC): \`$BUILD_TIME_ISO\`"
             echo "- Workflow: https://github.com/$REPOSITORY/actions/runs/$RUN_ID"
-            echo "- APK flavor: \`MetaRelease\`"
+            echo "- APK flavors: \`AlphaRelease\`, \`MetaRelease\`"
             echo "- Kernels: \`alpha\`, \`persistent-pin\`"
-            echo "- 文件名后缀: \`-alpha.apk\` 使用上游 alpha kernel，\`-pin.apk\` 使用 persistent-pin kernel。"
+            echo "- 文件名包含 \`alpha\` / \`meta\` 表示 Android flavor；末尾 \`-alpha.apk\` / \`-pin.apk\` 表示内核档位。"
+            echo "- 兼容旧数据安装: 使用 \`cmfa-*-alpha-*-pin.apk\`，包名保持 \`com.github.metacubex.clash.alpha\`。"
             echo
             echo "### Pin 内核发布线"
             echo "- pin release tag: \`$PIN_KERNEL_RELEASE_TAG\`"

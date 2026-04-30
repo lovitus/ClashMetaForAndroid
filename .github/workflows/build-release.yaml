@@ -236,7 +236,7 @@ jobs:
 
       - name: Release Build
         if: success()
-        run: ./gradlew --no-daemon app:assembleMetaRelease
+        run: ./gradlew --no-daemon app:assembleAlphaRelease app:assembleMetaRelease
 
       - name: Suffix APK names by kernel
         env:
@@ -244,8 +244,15 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
-          APK_DIR="app/build/outputs/apk/meta/release"
-          FILES=("$APK_DIR"/*.apk)
+          APK_DIRS=(
+            "app/build/outputs/apk/alpha/release"
+            "app/build/outputs/apk/meta/release"
+          )
+          FILES=()
+
+          for apk_dir in "${APK_DIRS[@]}"; do
+            FILES+=("$apk_dir"/*.apk)
+          done
 
           if [ ${#FILES[@]} -eq 0 ]; then
             echo "No release APKs produced."
@@ -254,7 +261,7 @@ jobs:
 
           for f in "${FILES[@]}"; do
             base=$(basename "$f")
-            mv "$f" "$APK_DIR/${base%.apk}-${KERNEL_ID}.apk"
+            mv "$f" "$(dirname "$f")/${base%.apk}-${KERNEL_ID}.apk"
           done
 
       - name: Upload Release Artifact
@@ -263,6 +270,7 @@ jobs:
         with:
           name: release-apk-${{ matrix.kernel.id }}
           path: |
+            app/build/outputs/apk/alpha/release/*-${{ matrix.kernel.id }}.apk
             app/build/outputs/apk/meta/release/*-${{ matrix.kernel.id }}.apk
 
   PublishRelease:
@@ -299,7 +307,9 @@ jobs:
             echo
             echo "### 发布概览"
             echo "- Workflow: https://github.com/$REPOSITORY/actions/runs/$RUN_ID"
+            echo "- APK flavors: \`AlphaRelease\`, \`MetaRelease\`"
             echo "- Kernels: \`alpha\`, \`persistent-pin\`"
+            echo "- 兼容旧数据安装: 使用 \`cmfa-*-alpha-*-pin.apk\`，包名保持 \`com.github.metacubex.clash.alpha\`。"
             echo
             echo "### 内核来源"
             echo "- alpha: 构建时动态解析上游 \`origin/main\` 的子模块指针"
