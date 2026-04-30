@@ -152,28 +152,13 @@ jobs:
           INFO_FILE="$INFO_DIR/kernel-$KERNEL_ID.md"
           mkdir -p "$INFO_DIR"
 
-          MIHOMO_BASE_BRANCH=$(git config -f .gitmodules --get submodule.clash-foss.branch || true)
-          if [ -z "${MIHOMO_BASE_BRANCH:-}" ]; then
-            MIHOMO_BASE_BRANCH="unknown"
-          fi
           MIHOMO_SHA=$(git -C core/src/foss/golang/clash rev-parse HEAD)
-          MIHOMO_IN_BASE="unknown"
-
-          if [ "$MIHOMO_BASE_BRANCH" != "unknown" ]; then
-            if git -C core/src/foss/golang/clash branch -r --contains "$MIHOMO_SHA" | grep -q "origin/$MIHOMO_BASE_BRANCH"; then
-              MIHOMO_IN_BASE="yes"
-            else
-              MIHOMO_IN_BASE="no"
-            fi
-          fi
 
           {
             echo "### Kernel: \`$KERNEL_ID ($KERNEL_LABEL)\`"
             echo "- Build time (UTC): \`$BUILD_TIME_ISO\`"
             echo "- Kernel source: \`$KERNEL_SOURCE\`"
-            echo "- mihomo 基线分支(.gitmodules): \`$MIHOMO_BASE_BRANCH\`"
-            echo "- mihomo 子模块提交: \`$MIHOMO_SHA\`"
-            echo "- mihomo 提交是否在基线分支内: \`$MIHOMO_IN_BASE\`"
+            echo "- mihomo resolved commit: \`$MIHOMO_SHA\`"
             if [ "$KERNEL_ID" = "pin" ]; then
               echo "- persistent-pin release tag: \`$PIN_KERNEL_RELEASE_TAG\`"
               echo "- persistent-pin release branch: \`$PIN_KERNEL_RELEASE_BRANCH\`"
