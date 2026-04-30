@@ -334,6 +334,7 @@ jobs:
       - name: Publish unified prerelease
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           TAG_NAME: ${{ steps.release-meta.outputs.tag_name }}
           RELEASE_NAME: ${{ steps.release-meta.outputs.release_name }}
           NOTES_FILE: ${{ steps.release-meta.outputs.notes_file }}
