@@ -141,6 +141,8 @@
     <string name="allow_bypass_summary">Allows all apps to bypass this VPN connection</string>
     <string name="allow_ipv6">Allow Ipv6</string>
     <string name="allow_ipv6_summary">Allows ipv6 traffic via VpnService</string>
+    <string name="auto_tun_address_isolation">Auto TUN Address Isolation</string>
+    <string name="auto_tun_address_isolation_summary">Android userId=%1$d, bucket=%2$d, IPv4 gateway=%3$s, portal/DNS=%4$s, IPv6 gateway=%5$s, portal/DNS=%6$s</string>
     <string name="system_proxy">System Proxy</string>
     <string name="system_proxy_summary">Attach http proxy to VpnService</string>
     <string name="access_control_mode">Access Control Mode</string>
@@ -177,6 +179,12 @@
     <string name="append_system_dns">Append System DNS</string>
     <string name="use_hosts">Use Hosts</string>
     <string name="enhanced_mode">Enhanced Mode</string>
+    <string name="fakeip_range">Fake-IP Range</string>
+    <string name="fakeip_range_dont_modify">Do not modify, use profile or CFMA default</string>
+    <string name="fakeip_range_28" translatable="false">28.0.0.0/8</string>
+    <string name="fakeip_range_29" translatable="false">29.0.0.0/8</string>
+    <string name="fakeip_range_198_18" translatable="false">198.18.0.1/16</string>
+    <string name="fakeip_range_198_19" translatable="false">198.19.0.1/16</string>
     <string name="name_server">Name Server</string>
     <string name="fallback">Fallback Name Server</string>
     <string name="default_name_server">Default Name Server</string>

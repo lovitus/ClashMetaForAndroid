@@ -43,7 +43,8 @@ fun <T> PreferenceScreen.selectableList(
             value.get()
         }
 
-        impl.selected = values.indexOf(initial)
+        val selected = values.indexOf(initial)
+        impl.selected = if (selected >= 0) selected else 0
 
         impl.clicked {
             popupSelectMenu(impl, value, valuesText.map { context.getText(it) }, values)

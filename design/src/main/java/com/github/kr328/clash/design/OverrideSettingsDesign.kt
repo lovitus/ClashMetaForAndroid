@@ -315,6 +315,26 @@ class OverrideSettingsDesign(
                 configure = dnsDependencies::add,
             )
 
+            selectableList(
+                value = configuration.dns::fakeIpRange,
+                values = arrayOf(
+                    null,
+                    "28.0.0.0/8",
+                    "29.0.0.0/8",
+                    "198.18.0.1/16",
+                    "198.19.0.1/16",
+                ),
+                valuesText = arrayOf(
+                    R.string.fakeip_range_dont_modify,
+                    R.string.fakeip_range_28,
+                    R.string.fakeip_range_29,
+                    R.string.fakeip_range_198_18,
+                    R.string.fakeip_range_198_19,
+                ),
+                title = R.string.fakeip_range,
+                configure = dnsDependencies::add,
+            )
+
             editableTextList(
                 value = configuration.dns::nameServer,
                 adapter = TextAdapter.String,

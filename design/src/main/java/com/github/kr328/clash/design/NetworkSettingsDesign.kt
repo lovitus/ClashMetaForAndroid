@@ -2,6 +2,7 @@ package com.github.kr328.clash.design
 
 import android.content.Context
 import android.os.Build
+import android.os.Process
 import android.view.View
 import com.github.kr328.clash.design.databinding.DesignSettingsCommonBinding
 import com.github.kr328.clash.design.preference.*
@@ -11,6 +12,7 @@ import com.github.kr328.clash.design.util.applyFrom
 import com.github.kr328.clash.design.util.bindAppBarElevation
 import com.github.kr328.clash.design.util.layoutInflater
 import com.github.kr328.clash.design.util.root
+import com.github.kr328.clash.service.TunAddress
 import com.github.kr328.clash.service.model.AccessControlMode
 import com.github.kr328.clash.service.store.ServiceStore
 import kotlinx.coroutines.launch
@@ -37,6 +39,20 @@ class NetworkSettingsDesign(
         binding.activityBarLayout.applyFrom(context)
 
         binding.scrollRoot.bindAppBarElevation(binding.activityBarLayout)
+
+        fun tunAddressIsolationSummary(): String {
+            val tunAddress = TunAddress.resolve(srvStore.autoTunAddressIsolation, Process.myUid())
+
+            return context.getString(
+                R.string.auto_tun_address_isolation_summary,
+                tunAddress.androidUserId,
+                tunAddress.bucket,
+                "${tunAddress.gateway4}/${tunAddress.prefix4}",
+                tunAddress.portal4,
+                "${tunAddress.gateway6}/${tunAddress.prefix6}",
+                tunAddress.portal6,
+            )
+        }
 
         val screen = preferenceScreen(context) {
             val vpnDependencies: MutableList<Preference> = mutableListOf()
@@ -83,6 +99,17 @@ class NetworkSettingsDesign(
                 summary = R.string.allow_ipv6_summary,
                 configure = vpnDependencies::add,
             )
+
+            switch(
+                value = srvStore::autoTunAddressIsolation,
+                title = R.string.auto_tun_address_isolation,
+            ) {
+                vpnDependencies.add(this)
+                summary = tunAddressIsolationSummary()
+                listener = OnChangedListener {
+                    summary = tunAddressIsolationSummary()
+                }
+            }
 
             if (Build.VERSION.SDK_INT >= 29) {
                 switch(

@@ -56,6 +56,11 @@ class ServiceStore(context: Context) {
         defaultValue = false
     )
 
+    var autoTunAddressIsolation by store.boolean(
+        key = "auto_tun_address_isolation",
+        defaultValue = false
+    )
+
     var tunStackMode by store.string(
         key = "tun_stack_mode",
         defaultValue = "system"

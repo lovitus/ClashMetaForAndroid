@@ -126,6 +126,8 @@
     <string name="format_elements">%d 个条目</string>
     <string name="strategy">策略</string>
     <string name="enhanced_mode">增强模式</string>
+    <string name="fakeip_range">Fake-IP 地址池</string>
+    <string name="fakeip_range_dont_modify">不覆写，使用配置文件或 CFMA 默认</string>
     <string name="name_server">Name Server</string>
     <string name="fallback">Fallback Name Server</string>
     <string name="default_name_server">Default Name Server</string>
@@ -240,6 +242,8 @@
     <string name="allow_bypass_summary">允许其他应用绕过 VPN</string>
     <string name="allow_ipv6">允许 Ipv6</string>
     <string name="allow_ipv6_summary">通过 VpnService 代理 Ipv6 流量</string>
+    <string name="auto_tun_address_isolation">自动隔离 TUN 地址</string>
+    <string name="auto_tun_address_isolation_summary">Android userId=%1$d，bucket=%2$d，IPv4 gateway=%3$s，portal/DNS=%4$s，IPv6 gateway=%5$s，portal/DNS=%6$s</string>
     <string name="clash_meta_wiki">Clash Meta Wiki</string>
     <string name="meta_features">Meta 特性</string>
     <string name="unified_delay">统一延迟</string>

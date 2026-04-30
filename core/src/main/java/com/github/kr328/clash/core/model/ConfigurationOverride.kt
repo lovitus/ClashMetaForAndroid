@@ -100,6 +100,9 @@ data class ConfigurationOverride(
         @SerialName("enhanced-mode")
         var enhancedMode: DnsEnhancedMode? = null,
 
+        @SerialName("fake-ip-range")
+        var fakeIpRange: String? = null,
+
         @SerialName("nameserver")
         var nameServer: List<String>? = null,
 

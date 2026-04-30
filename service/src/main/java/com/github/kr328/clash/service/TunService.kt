@@ -6,6 +6,7 @@ import android.content.Intent
 import android.net.ProxyInfo
 import android.net.VpnService
 import android.os.Build
+import android.os.Process
 import com.github.kr328.clash.common.compat.pendingIntentFlags
 import com.github.kr328.clash.common.constants.Components
 import com.github.kr328.clash.common.log.Log
@@ -122,12 +123,13 @@ class TunService : VpnService(), CoroutineScope by CoroutineScope(Dispatchers.De
 
     private fun TunModule.open() {
         val store = ServiceStore(self)
+        val tunAddress = TunAddress.resolve(store.autoTunAddressIsolation, Process.myUid())
 
         val device = with(Builder()) {
             // Interface address
-            addAddress(TUN_GATEWAY, TUN_SUBNET_PREFIX)
+            addAddress(tunAddress.gateway4, tunAddress.prefix4)
             if (store.allowIpv6) {
-                addAddress(TUN_GATEWAY6, TUN_SUBNET_PREFIX6)
+                addAddress(tunAddress.gateway6, tunAddress.prefix6)
             }
 
             // Route
@@ -142,9 +144,9 @@ class TunService : VpnService(), CoroutineScope by CoroutineScope(Dispatchers.De
                 }
 
                 // Route of virtual DNS
-                addRoute(TUN_DNS, 32)
+                addRoute(tunAddress.dns4, 32)
                 if (store.allowIpv6) {
-                    addRoute(TUN_DNS6, 128)
+                    addRoute(tunAddress.dns6, 128)
                 }
             } else {
                 addRoute(NET_ANY, 0)
@@ -178,9 +180,9 @@ class TunService : VpnService(), CoroutineScope by CoroutineScope(Dispatchers.De
             setSession("Clash")
 
             // Virtual Dns Server
-            addDnsServer(TUN_DNS)
+            addDnsServer(tunAddress.dns4)
             if (store.allowIpv6) {
-                addDnsServer(TUN_DNS6)
+                addDnsServer(tunAddress.dns6)
             }
 
             // Open MainActivity
@@ -219,9 +221,9 @@ class TunService : VpnService(), CoroutineScope by CoroutineScope(Dispatchers.De
                 fd = establish()?.detachFd()
                     ?: throw NullPointerException("Establish VPN rejected by system"),
                 stack = store.tunStackMode,
-                gateway = "$TUN_GATEWAY/$TUN_SUBNET_PREFIX" + if (store.allowIpv6) ",$TUN_GATEWAY6/$TUN_SUBNET_PREFIX6" else "",
-                portal = TUN_PORTAL + if (store.allowIpv6) ",$TUN_PORTAL6" else "",
-                dns = if (store.dnsHijacking) NET_ANY else (TUN_DNS + if (store.allowIpv6) ",$TUN_DNS6" else ""),
+                gateway = tunAddress.gatewaySpec(store.allowIpv6),
+                portal = tunAddress.portalSpec(store.allowIpv6),
+                dns = if (store.dnsHijacking) NET_ANY else tunAddress.dnsSpec(store.allowIpv6),
             )
         }
 
@@ -230,14 +232,6 @@ class TunService : VpnService(), CoroutineScope by CoroutineScope(Dispatchers.De
 
     companion object {
         private const val TUN_MTU = 9000
-        private const val TUN_SUBNET_PREFIX = 30
-        private const val TUN_GATEWAY = "172.19.0.1"
-        private const val TUN_SUBNET_PREFIX6 = 126
-        private const val TUN_GATEWAY6 = "fdfe:dcba:9876::1"
-        private const val TUN_PORTAL = "172.19.0.2"
-        private const val TUN_PORTAL6 = "fdfe:dcba:9876::2"
-        private const val TUN_DNS = TUN_PORTAL
-        private const val TUN_DNS6 = TUN_PORTAL6
         private const val NET_ANY = "0.0.0.0"
         private const val NET_ANY6 = "::"
 
