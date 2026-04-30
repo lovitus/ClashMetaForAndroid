@@ -315,7 +315,7 @@ jobs:
             echo "- APK flavor: \`AlphaRelease\`"
             echo "- Kernels: \`alpha\`, \`persistent-pin\`"
             echo "- Android 包名保持 \`com.github.metacubex.clash.alpha\`，可覆盖历史 Debug Alpha / pin 包并保留数据。"
-            echo "- 文件名前缀 \`alpha-kernel-\` 使用上游 alpha kernel，\`persistent-pin-\` 使用 persistent-pin kernel。"
+            echo "- APK 文件名中的 \`alpha\` 表示上游 alpha kernel，\`pin\` 表示 persistent-pin kernel。"
             echo
             echo "### Pin 内核发布线"
             echo "- pin release tag: \`$PIN_KERNEL_RELEASE_TAG\`"
