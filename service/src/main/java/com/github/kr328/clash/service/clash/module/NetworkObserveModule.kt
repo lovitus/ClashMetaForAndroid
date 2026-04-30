@@ -7,8 +7,10 @@ import androidx.core.content.getSystemService
 import com.github.kr328.clash.common.log.Log
 import com.github.kr328.clash.core.Clash
 import com.github.kr328.clash.service.util.asSocketAddressText
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.selects.onTimeout
 import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.withContext
 import java.net.InetAddress
@@ -17,6 +19,7 @@ import java.util.concurrent.ConcurrentHashMap
 class NetworkObserveModule(service: Service) : Module<Network>(service) {
     private val connectivity = service.getSystemService<ConnectivityManager>()!!
     private val networks: Channel<Network> = Channel(Channel.UNLIMITED)
+    private val networkChanges: Channel<Unit> = Channel(Channel.CONFLATED)
     private val request = NetworkRequest.Builder().apply {
         addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
         addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
@@ -42,12 +45,15 @@ class NetworkObserveModule(service: Service) : Module<Network>(service) {
         override fun onAvailable(network: Network) {
             Log.i("NetworkObserve onAvailable network=$network")
             networkInfos[network] = NetworkInfo()
+            notifyNetworkChangedDebounced()
+
+            networks.trySend(network)
         }
 
         override fun onLosing(network: Network, maxMsToLive: Int) {
             Log.i("NetworkObserve onLosing network=$network")
             networkInfos[network]?.losingMs = System.currentTimeMillis() + maxMsToLive
-            notifyDnsChange()
+            notifyNetworkChangedDebounced()
 
             networks.trySend(network)
         }
@@ -55,7 +61,7 @@ class NetworkObserveModule(service: Service) : Module<Network>(service) {
         override fun onLost(network: Network) {
             Log.i("NetworkObserve onLost network=$network")
             networkInfos.remove(network)
-            notifyDnsChange()
+            notifyNetworkChangedDebounced()
 
             networks.trySend(network)
         }
@@ -63,7 +69,7 @@ class NetworkObserveModule(service: Service) : Module<Network>(service) {
         override fun onLinkPropertiesChanged(network: Network, linkProperties: LinkProperties) {
             Log.i("NetworkObserve onLinkPropertiesChanged network=$network $linkProperties")
             networkInfos[network]?.dnsList = linkProperties.dnsServers
-            notifyDnsChange()
+            notifyNetworkChangedDebounced()
 
             networks.trySend(network)
         }
@@ -71,6 +77,10 @@ class NetworkObserveModule(service: Service) : Module<Network>(service) {
         override fun onUnavailable() {
             Log.i("NetworkObserve onUnavailable")
         }
+    }
+
+    private fun notifyNetworkChangedDebounced() {
+        networkChanges.trySend(Unit)
     }
 
     private fun register(): Boolean {
@@ -116,31 +126,47 @@ class NetworkObserveModule(service: Service) : Module<Network>(service) {
         } + (if (entry.value.isAvailable()) 0 else 10)
     }
 
-    private fun notifyDnsChange() {
-        val dnsList = (networkInfos.asSequence().minByOrNull { networkToInt(it) }?.value?.dnsList
+    private fun currentDnsList(): List<String> {
+        return (networkInfos.asSequence().minByOrNull { networkToInt(it) }?.value?.dnsList
             ?: emptyList()).map { x -> x.asSocketAddressText(53) }
+    }
+
+    private fun notifyDnsChange(force: Boolean = false) {
+        val dnsList = currentDnsList()
         val prevDnsList = curDnsList
-        if (dnsList.isNotEmpty() && prevDnsList != dnsList) {
-            Log.i("notifyDnsChange $prevDnsList -> $dnsList")
+        val notifyList = if (dnsList.isNotEmpty()) dnsList else prevDnsList
+        if (dnsList.isNotEmpty()) {
             curDnsList = dnsList
-            Clash.notifyDnsChanged(dnsList)
+        }
+
+        if (force || (notifyList.isNotEmpty() && prevDnsList != notifyList)) {
+            Log.i("notifyDnsChange force=$force $prevDnsList -> $notifyList")
+            Clash.notifyDnsChanged(notifyList)
         }
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     override suspend fun run() {
         register()
 
         try {
+            var pendingNetworkRecovery = false
             while (true) {
-                val quit = select {
+                select<Unit> {
                     networks.onReceive {
                         enqueueEvent(it)
-
-                        false
                     }
-                }
-                if (quit) {
-                    return
+
+                    networkChanges.onReceive {
+                        pendingNetworkRecovery = true
+                    }
+
+                    if (pendingNetworkRecovery) {
+                        onTimeout(NETWORK_CHANGE_DEBOUNCE_MS) {
+                            pendingNetworkRecovery = false
+                            notifyDnsChange(force = true)
+                        }
+                    }
                 }
             }
         } finally {
@@ -151,5 +177,9 @@ class NetworkObserveModule(service: Service) : Module<Network>(service) {
                 Clash.notifyDnsChanged(emptyList())
             }
         }
+    }
+
+    companion object {
+        private const val NETWORK_CHANGE_DEBOUNCE_MS = 2000L
     }
 }
