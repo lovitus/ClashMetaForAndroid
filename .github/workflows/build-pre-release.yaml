@@ -193,11 +193,19 @@ jobs:
 
       - name: Pre-release Build
         if: success()
-        run: ./gradlew --no-daemon app:assembleAlphaRelease
-
-      - name: Prefix APK names by kernel
         env:
-          KERNEL_LABEL: ${{ matrix.kernel.label }}
+          KERNEL_MODE: ${{ matrix.kernel.mode }}
+        run: |
+          set -euo pipefail
+          if [ "$KERNEL_MODE" = "pin" ]; then
+            ./gradlew --no-daemon app:assembleAlphaRelease "-PkernelBranch=$PIN_KERNEL_RELEASE_BRANCH"
+          else
+            ./gradlew --no-daemon app:assembleAlphaRelease
+          fi
+
+      - name: Rename APKs by kernel variant
+        env:
+          KERNEL_MODE: ${{ matrix.kernel.mode }}
         run: |
           set -euo pipefail
           shopt -s nullglob
@@ -209,10 +217,13 @@ jobs:
             exit 1
           fi
 
-          for f in "${FILES[@]}"; do
-            base=$(basename "$f")
-            mv "$f" "$APK_DIR/${KERNEL_LABEL}-${base}"
-          done
+          if [ "$KERNEL_MODE" = "pin" ]; then
+            for f in "${FILES[@]}"; do
+              base=$(basename "$f")
+              newbase="${base//-alpha-/-pin-}"
+              [ "$newbase" != "$base" ] && mv "$f" "$APK_DIR/$newbase"
+            done
+          fi
 
       - name: Upload Pre-release APK Artifact
         uses: actions/upload-artifact@v4
@@ -220,7 +231,7 @@ jobs:
         with:
           name: prerelease-apk-${{ matrix.kernel.id }}
           path: |
-            app/build/outputs/apk/alpha/release/${{ matrix.kernel.label }}-*.apk
+            app/build/outputs/apk/alpha/release/cmfa-*-${{ matrix.kernel.id }}-*.apk
 
       - name: Upload Pre-release Metadata Artifact
         uses: actions/upload-artifact@v4

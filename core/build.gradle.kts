@@ -36,6 +36,10 @@ android {
                     arguments("-DGO_SOURCE:STRING=${golangSource}")
                     arguments("-DGO_OUTPUT:STRING=${GolangPlugin.outputDirOf(project, null, null)}")
                     arguments("-DFLAVOR_NAME:STRING=$name")
+                    val kernelBranch = (rootProject.findProperty("kernelBranch") as? String)?.takeIf { it.isNotBlank() }
+                    if (kernelBranch != null) {
+                        arguments("-DKERNEL_BRANCH_OVERRIDE:STRING=$kernelBranch")
+                    }
                 }
             }
         }
