@@ -132,12 +132,8 @@ jobs:
           cp -f /etc/ssl/certs/ca-certificates.crt core/src/foss/golang/clash/component/ca/ca-certificates.crt
 
       - name: Prepare release metadata
-        id: release-meta
+        id: build-meta
         env:
-          REF_NAME: ${{ github.ref_name }}
-          REPOSITORY: ${{ github.repository }}
-          RUN_ID: ${{ github.run_id }}
-          SHA: ${{ github.sha }}
           KERNEL_ID: ${{ matrix.kernel.id }}
           KERNEL_LABEL: ${{ matrix.kernel.label }}
           KERNEL_SOURCE: ${{ steps.kernel-ref.outputs.kernel_source }}
@@ -146,46 +142,27 @@ jobs:
           PIN_KERNEL_RELEASE_BRANCH: ${{ env.PIN_KERNEL_RELEASE_BRANCH }}
         run: |
           set -euo pipefail
-          SAFE_REF=$(printf '%s' "$REF_NAME" | tr '/ ' '-' | tr -cd '[:alnum:]._-')
-          if [ -z "$SAFE_REF" ]; then
-            SAFE_REF="run-$RUN_ID"
-          fi
-          SHORT_SHA=$(printf '%s' "$SHA" | cut -c1-8)
-          BUILD_TS=$(date -u +%Y%m%d-%H%M%S)
           BUILD_TIME_ISO=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          TAG_NAME="prerelease-alpha-$BUILD_TS-$SAFE_REF-$KERNEL_ID-$SHORT_SHA-r$RUN_ID"
-          RELEASE_NAME="$BUILD_TS Prerelease Alpha ($REF_NAME / $KERNEL_LABEL) [$SHORT_SHA / run $RUN_ID]"
-
-          CURRENT_SHA=$(git rev-parse HEAD)
-          NOTES_FILE="$RUNNER_TEMP/prerelease-notes.md"
+          INFO_DIR="$RUNNER_TEMP/prerelease-info"
+          INFO_FILE="$INFO_DIR/kernel-$KERNEL_ID.md"
+          mkdir -p "$INFO_DIR"
           MIHOMO_SHA=$(git -C core/src/foss/golang/clash rev-parse HEAD)
 
           {
-            echo "Automated pre-release build for \`$REF_NAME\`."
-            echo
-            echo "### Build Summary"
-            echo "- Commit: \`$CURRENT_SHA\`"
+            echo "### Kernel: \`$KERNEL_ID ($KERNEL_LABEL)\`"
             echo "- Build time (UTC): \`$BUILD_TIME_ISO\`"
-            echo "- Kernel: \`$KERNEL_ID ($KERNEL_LABEL)\`"
             echo "- Kernel source: \`$KERNEL_SOURCE\`"
             echo "- mihomo commit: \`$MIHOMO_SHA\`"
-            echo "- Workflow: https://github.com/$REPOSITORY/actions/runs/$RUN_ID"
             echo "- Kernel module normalized with: \`go mod tidy\`"
+            if [ "$KERNEL_ID" = "pin" ]; then
+              echo "- pin release tag: \`$PIN_KERNEL_RELEASE_TAG\`"
+              echo "- pin release branch: \`$PIN_KERNEL_RELEASE_BRANCH\`"
+              echo "- pin resolved commit: \`$PIN_KERNEL_REF\`"
+            fi
             echo
-            echo "### Pin Kernel Release Line"
-            echo "- pin release tag: \`$PIN_KERNEL_RELEASE_TAG\`"
-            echo "- pin release branch: \`$PIN_KERNEL_RELEASE_BRANCH\`"
-            echo "- pin resolved commit: \`$PIN_KERNEL_REF\`"
-            echo
-            echo "### 中文说明"
-            echo "- 本次预发布采用双内核统一构建。"
-            echo "- \`alpha\` 按构建时的上游 \`origin/main\` 子模块指针解析。"
-            echo "- \`persistent-pin\` 固定到 \`$PIN_KERNEL_RELEASE_TAG\` / \`$PIN_KERNEL_REF\`，用于保持自定义 pin 行为稳定。"
-          } > "$NOTES_FILE"
+          } > "$INFO_FILE"
 
-          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
-          echo "release_name=$RELEASE_NAME" >> "$GITHUB_OUTPUT"
-          echo "notes_file=$NOTES_FILE" >> "$GITHUB_OUTPUT"
+          echo "info_dir=$INFO_DIR" >> "$GITHUB_OUTPUT"
 
       - name: Decrypt CI signing keystore
         env:
@@ -216,21 +193,125 @@ jobs:
 
       - name: Pre-release Build
         if: success()
-        run: ./gradlew --no-daemon app:assembleAlphaRelease
+        run: ./gradlew --no-daemon app:assembleMetaRelease
 
-      - name: Publish prerelease
+      - name: Suffix APK names by kernel
+        env:
+          KERNEL_ID: ${{ matrix.kernel.id }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          APK_DIR="app/build/outputs/apk/meta/release"
+          FILES=("$APK_DIR"/*.apk)
+
+          if [ ${#FILES[@]} -eq 0 ]; then
+            echo "No pre-release APKs produced."
+            exit 1
+          fi
+
+          for f in "${FILES[@]}"; do
+            base=$(basename "$f")
+            mv "$f" "$APK_DIR/${base%.apk}-${KERNEL_ID}.apk"
+          done
+
+      - name: Upload Pre-release APK Artifact
+        uses: actions/upload-artifact@v4
         if: ${{ success() }}
+        with:
+          name: prerelease-apk-${{ matrix.kernel.id }}
+          path: |
+            app/build/outputs/apk/meta/release/*-${{ matrix.kernel.id }}.apk
+
+      - name: Upload Pre-release Metadata Artifact
+        uses: actions/upload-artifact@v4
+        if: ${{ success() }}
+        with:
+          name: prerelease-info-${{ matrix.kernel.id }}
+          path: |
+            ${{ steps.build-meta.outputs.info_dir }}/*.md
+
+  PublishPreRelease:
+    needs: [BuildPreRelease]
+    runs-on: ubuntu-latest
+    env:
+      PIN_KERNEL_REF: 313230d95da4f28f9c23327709d7c91dcfc48919
+      PIN_KERNEL_RELEASE_TAG: v2026.04.20-persistent-pin.5
+      PIN_KERNEL_RELEASE_BRANCH: persistent-pin-option-1.19.24merge
+    steps:
+      - name: Download pre-release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: prerelease-*
+          path: ${{ runner.temp }}/prerelease
+          merge-multiple: true
+
+      - name: Prepare unified release metadata
+        id: release-meta
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          SHA: ${{ github.sha }}
+          PIN_KERNEL_REF: ${{ env.PIN_KERNEL_REF }}
+          PIN_KERNEL_RELEASE_TAG: ${{ env.PIN_KERNEL_RELEASE_TAG }}
+          PIN_KERNEL_RELEASE_BRANCH: ${{ env.PIN_KERNEL_RELEASE_BRANCH }}
+        run: |
+          set -euo pipefail
+          SAFE_REF=$(printf '%s' "$REF_NAME" | tr '/ ' '-' | tr -cd '[:alnum:]._-')
+          if [ -z "$SAFE_REF" ]; then
+            SAFE_REF="run-$RUN_ID"
+          fi
+          SHORT_SHA=$(printf '%s' "$SHA" | cut -c1-8)
+          BUILD_TS=$(date -u +%Y%m%d-%H%M%S)
+          BUILD_TIME_ISO=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          NOTES_FILE="$RUNNER_TEMP/prerelease-notes.md"
+
+          {
+            echo "Automated unified pre-release build for \`$REF_NAME\`."
+            echo
+            echo "### Build Summary"
+            echo "- Commit: \`$SHA\`"
+            echo "- Build time (UTC): \`$BUILD_TIME_ISO\`"
+            echo "- APK flavor: \`MetaRelease\`"
+            echo "- Kernels: \`alpha\`, \`persistent-pin\`"
+            echo "- Workflow: https://github.com/$REPOSITORY/actions/runs/$RUN_ID"
+            echo "- 文件名后缀: \`-alpha.apk\` 使用上游 alpha kernel，\`-pin.apk\` 使用 persistent-pin kernel。"
+            echo
+            echo "### Pin Kernel Release Line"
+            echo "- pin release tag: \`$PIN_KERNEL_RELEASE_TAG\`"
+            echo "- pin release branch: \`$PIN_KERNEL_RELEASE_BRANCH\`"
+            echo "- pin resolved commit: \`$PIN_KERNEL_REF\`"
+            echo
+            echo "### Kernel Build Details"
+            find "$RUNNER_TEMP/prerelease" -maxdepth 1 -type f -name 'kernel-*.md' -print0 | sort -z | xargs -0 -r cat
+            echo
+            echo "### Artifacts"
+            find "$RUNNER_TEMP/prerelease" -maxdepth 1 -type f -name '*.apk' -printf -- "- %f\n" | sort
+          } > "$NOTES_FILE"
+
+          echo "tag_name=prerelease-meta-$BUILD_TS-$SAFE_REF-dual-kernel-$SHORT_SHA-r$RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "release_name=$BUILD_TS Prerelease Meta ($REF_NAME / dual-kernel) [$SHORT_SHA / run $RUN_ID]" >> "$GITHUB_OUTPUT"
+          echo "notes_file=$NOTES_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Publish unified prerelease
         env:
           GH_TOKEN: ${{ github.token }}
           TAG_NAME: ${{ steps.release-meta.outputs.tag_name }}
           RELEASE_NAME: ${{ steps.release-meta.outputs.release_name }}
           NOTES_FILE: ${{ steps.release-meta.outputs.notes_file }}
+          TARGET_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          TARGET_SHA=$(git rev-parse HEAD)
+          shopt -s nullglob
+          APK_FILES=("$RUNNER_TEMP"/prerelease/*.apk)
+
+          if [ ${#APK_FILES[@]} -eq 0 ]; then
+            echo "No APK files found to publish."
+            exit 1
+          fi
 
           gh release create "$TAG_NAME" \
-            app/build/outputs/apk/alpha/release/*.apk \
+            "${APK_FILES[@]}" \
             --target "$TARGET_SHA" \
             --title "$RELEASE_NAME" \
             --notes-file "$NOTES_FILE" \

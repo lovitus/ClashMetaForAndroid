@@ -136,13 +136,9 @@ jobs:
           cp -f /etc/ssl/certs/ca-certificates.crt core/src/foss/golang/clash/component/ca/ca-certificates.crt
 
       - name: Prepare release metadata
-        id: release-meta
+        id: build-meta
         if: github.event_name != 'pull_request'
         env:
-          REF_NAME: ${{ github.ref_name }}
-          REPOSITORY: ${{ github.repository }}
-          RUN_ID: ${{ github.run_id }}
-          SHA: ${{ github.sha }}
           KERNEL_ID: ${{ matrix.kernel.id }}
           KERNEL_LABEL: ${{ matrix.kernel.label }}
           KERNEL_SOURCE: ${{ steps.kernel-ref.outputs.kernel_source }}
@@ -151,16 +147,11 @@ jobs:
           PIN_KERNEL_RELEASE_BRANCH: ${{ env.PIN_KERNEL_RELEASE_BRANCH }}
         run: |
           set -euo pipefail
-          SAFE_REF=$(printf '%s' "$REF_NAME" | tr '/ ' '-' | tr -cd '[:alnum:]._-')
-          if [ -z "$SAFE_REF" ]; then
-            SAFE_REF="run-$RUN_ID"
-          fi
-          SHORT_SHA=$(printf '%s' "$SHA" | cut -c1-8)
-          BUILD_TS=$(date -u +%Y%m%d-%H%M%S)
           BUILD_TIME_ISO=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          NOTES_FILE="$RUNNER_TEMP/release-notes.md"
-          COMMITS_FILE="$RUNNER_TEMP/recent-commits.md"
-          FILES_FILE="$RUNNER_TEMP/current-files.md"
+          INFO_DIR="$RUNNER_TEMP/release-info"
+          INFO_FILE="$INFO_DIR/kernel-$KERNEL_ID.md"
+          mkdir -p "$INFO_DIR"
+
           MIHOMO_BASE_BRANCH=$(git config -f .gitmodules --get submodule.clash-foss.branch || true)
           if [ -z "${MIHOMO_BASE_BRANCH:-}" ]; then
             MIHOMO_BASE_BRANCH="unknown"
@@ -176,95 +167,22 @@ jobs:
             fi
           fi
 
-          git log --no-merges -n 15 --pretty=format:'- `%h` %s' > "$COMMITS_FILE"
-
-          # In shallow clones, parent commit may be missing and cause file list inflation.
-          if ! git cat-file -e "${SHA}^" 2>/dev/null; then
-            git fetch --no-tags --depth=2 origin "$REF_NAME" || true
-          fi
-
-          if git cat-file -e "${SHA}^" 2>/dev/null; then
-            git diff --name-only "${SHA}^" "$SHA" > "$FILES_FILE"
-          else
-            # Fallback for true root commits where parent does not exist.
-            git ls-tree --name-only -r "$SHA" > "$FILES_FILE"
-          fi
-
-          CN_CHANGES_FILE="$RUNNER_TEMP/current-changes-zh.md"
-          : > "$CN_CHANGES_FILE"
-
-          if grep -q '^core/src/main/golang/native/tunnel/proxies.go$' "$FILES_FILE" || \
-             grep -q '^design/src/main/java/com/github/kr328/clash/design/component/ProxyViewState.kt$' "$FILES_FILE"; then
-            echo "- 代理组刷新稳定性修复：减少无变化数据导致的列表闪烁，保持选择/固定状态显示一致。" >> "$CN_CHANGES_FILE"
-          fi
-
-          if grep -q '^core/src/main/golang/native/tunnel/providers.go$' "$FILES_FILE" || \
-             grep -q '^core/src/main/java/com/github/kr328/clash/core/model/Provider.kt$' "$FILES_FILE" || \
-             grep -q '^design/src/main/java/com/github/kr328/clash/design/util/I18n.kt$' "$FILES_FILE"; then
-            echo "- Providers 页面增强：显示 Proxy Provider 节点数量与 Rule Provider 规则数量（使用内核现成 Count 数据）。" >> "$CN_CHANGES_FILE"
-          fi
-
-          if grep -q '^design/src/main/res/layout/design_proxy.xml$' "$FILES_FILE"; then
-            echo "- 代理页顶部操作按钮图标语义优化：清空过滤 / 全部折叠图标映射更直观。" >> "$CN_CHANGES_FILE"
-          fi
-
-          if grep -q '^.github/workflows/build-debug.yaml$' "$FILES_FILE" || \
-             grep -q '^.github/workflows/build-pre-release.yaml$' "$FILES_FILE"; then
-            echo "- 构建与发布信息优化：Release 标题按时间前缀命名，排序更清晰。" >> "$CN_CHANGES_FILE"
-          fi
-
-          sed -i 's|^|- `|; s|$|`|' "$FILES_FILE"
-
           {
-            echo "## 调试版本说明 (Debug Build)"
-            echo
-            echo "> 这是**调试版本**（Debug/Prerelease），用于验证与排障，不作为稳定发布。"
-            echo
-            echo "### 构建信息"
-            echo "- 分支: \`$REF_NAME\`"
-            echo "- 提交: \`$SHA\`"
-            echo "- 构建时间(UTC): \`$BUILD_TIME_ISO\`"
-            echo "- 内核档位: \`$KERNEL_ID ($KERNEL_LABEL)\`"
-            echo "- 内核来源: \`$KERNEL_SOURCE\`"
-            echo "- Workflow: https://github.com/$REPOSITORY/actions/runs/$RUN_ID"
+            echo "### Kernel: \`$KERNEL_ID ($KERNEL_LABEL)\`"
+            echo "- Build time (UTC): \`$BUILD_TIME_ISO\`"
+            echo "- Kernel source: \`$KERNEL_SOURCE\`"
             echo "- mihomo 基线分支(.gitmodules): \`$MIHOMO_BASE_BRANCH\`"
             echo "- mihomo 子模块提交: \`$MIHOMO_SHA\`"
             echo "- mihomo 提交是否在基线分支内: \`$MIHOMO_IN_BASE\`"
-            echo "- 构建前归一化: 已对 \`clash\` / \`foss\` 两层 module 执行 \`go mod tidy\`，并按 Android ABI 预解析 \`cfa/native\` 依赖图"
-            echo
-            echo "### Pin 内核发布线"
-            echo "- pin release tag: \`$PIN_KERNEL_RELEASE_TAG\`"
-            echo "- pin release branch: \`$PIN_KERNEL_RELEASE_BRANCH\`"
-            echo "- pin resolved commit: \`$PIN_KERNEL_REF\`"
-            echo
-            echo "### 本次实际改动（中文）"
-            if [ -s "$CN_CHANGES_FILE" ]; then
-              cat "$CN_CHANGES_FILE"
-            else
-              echo "- 本次提交未命中预设改动摘要规则，请参考下方提交记录与改动文件列表。"
-            fi
             if [ "$KERNEL_ID" = "pin" ]; then
-              echo "- 本次 \`persistent-pin\` 调试构建固定到 \`$PIN_KERNEL_RELEASE_TAG\` 发布线，便于验证自定义 pin 行为。"
+              echo "- persistent-pin release tag: \`$PIN_KERNEL_RELEASE_TAG\`"
+              echo "- persistent-pin release branch: \`$PIN_KERNEL_RELEASE_BRANCH\`"
+              echo "- persistent-pin resolved commit: \`$PIN_KERNEL_REF\`"
             fi
             echo
-            echo "### 最近提交（最多 15 条）"
-            if [ -s "$COMMITS_FILE" ]; then
-              cat "$COMMITS_FILE"
-            else
-              echo "- 无提交记录"
-            fi
-            echo
-            echo "### 当前提交改动文件"
-            if [ -s "$FILES_FILE" ]; then
-              cat "$FILES_FILE"
-            else
-              echo "- 无文件改动信息"
-            fi
-          } > "$NOTES_FILE"
+          } > "$INFO_FILE"
 
-          echo "tag_name=debug-alpha-$BUILD_TS-$SAFE_REF-$KERNEL_ID-$SHORT_SHA-r$RUN_ID" >> "$GITHUB_OUTPUT"
-          echo "release_name=$BUILD_TS Debug Alpha 调试版本 ($REF_NAME / $KERNEL_LABEL) [$SHORT_SHA / run $RUN_ID]" >> "$GITHUB_OUTPUT"
-          echo "notes_file=$NOTES_FILE" >> "$GITHUB_OUTPUT"
+          echo "info_dir=$INFO_DIR" >> "$GITHUB_OUTPUT"
 
       - name: Decrypt CI debug keystore
         if: github.event_name != 'pull_request'
@@ -297,50 +215,111 @@ jobs:
 
       - name: Build
         if: success()
-        run: ./gradlew --no-daemon app:assembleAlphaRelease
-          
-      - name: Upload Aritfact (universal)
-        uses: actions/upload-artifact@v4
-        if: ${{  success() }}
-        with:
-          name: CMFA Debug APK (universal, ${{ matrix.kernel.id }})
-          path: |
-            app/build/outputs/apk/alpha/release/*-universal-*.apk
-      
-      - name: Upload Aritfact (arm64-v8a)
-        uses: actions/upload-artifact@v4
-        if: ${{  success() }}
-        with:
-          name: CMFA Debug APK (arm64-v8a, ${{ matrix.kernel.id }})
-          path: |
-            app/build/outputs/apk/alpha/release/*-arm64-v8a-*.apk
-      
-      - name: Upload Aritfact (armeabi-v7a)
-        uses: actions/upload-artifact@v4
-        if: ${{  success() }}
-        with:
-          name: CMFA Debug APK (armeabi-v7a, ${{ matrix.kernel.id }})
-          path: |
-            app/build/outputs/apk/alpha/release/*-armeabi-v7a-*.apk
-      
-      - name: Upload Aritfact (x86_64)
-        uses: actions/upload-artifact@v4
-        if: ${{  success() }}
-        with:
-          name: CMFA Debug APK (x86_64, ${{ matrix.kernel.id }})
-          path: |
-            app/build/outputs/apk/alpha/release/*-x86_64-*.apk
-      
-      - name: Upload Aritfact (x86)
-        uses: actions/upload-artifact@v4
-        if: ${{  success() }}
-        with:
-          name: CMFA Debug APK (x86, ${{ matrix.kernel.id }})
-          path: |
-            app/build/outputs/apk/alpha/release/*-x86-*.apk
+        run: ./gradlew --no-daemon app:assembleMetaRelease
 
-      - name: Publish prerelease
+      - name: Suffix APK names by kernel
+        env:
+          KERNEL_ID: ${{ matrix.kernel.id }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          APK_DIR="app/build/outputs/apk/meta/release"
+          FILES=("$APK_DIR"/*.apk)
+
+          if [ ${#FILES[@]} -eq 0 ]; then
+            echo "No debug APKs produced."
+            exit 1
+          fi
+
+          for f in "${FILES[@]}"; do
+            base=$(basename "$f")
+            mv "$f" "$APK_DIR/${base%.apk}-${KERNEL_ID}.apk"
+          done
+
+      - name: Upload Debug APK Artifact
+        uses: actions/upload-artifact@v4
+        if: ${{ success() }}
+        with:
+          name: debug-apk-${{ matrix.kernel.id }}
+          path: |
+            app/build/outputs/apk/meta/release/*-${{ matrix.kernel.id }}.apk
+
+      - name: Upload Debug Metadata Artifact
+        uses: actions/upload-artifact@v4
         if: ${{ success() && github.event_name != 'pull_request' }}
+        with:
+          name: debug-info-${{ matrix.kernel.id }}
+          path: |
+            ${{ steps.build-meta.outputs.info_dir }}/*.md
+
+  PublishDebugRelease:
+    needs: [BuildDebug]
+    if: ${{ success() && github.event_name != 'pull_request' }}
+    runs-on: ubuntu-latest
+    env:
+      PIN_KERNEL_REF: 313230d95da4f28f9c23327709d7c91dcfc48919
+      PIN_KERNEL_RELEASE_TAG: v2026.04.20-persistent-pin.5
+      PIN_KERNEL_RELEASE_BRANCH: persistent-pin-option-1.19.24merge
+    steps:
+      - name: Download debug artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: debug-*
+          path: ${{ runner.temp }}/debug-release
+          merge-multiple: true
+
+      - name: Prepare unified release metadata
+        id: release-meta
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          SHA: ${{ github.sha }}
+          PIN_KERNEL_REF: ${{ env.PIN_KERNEL_REF }}
+          PIN_KERNEL_RELEASE_TAG: ${{ env.PIN_KERNEL_RELEASE_TAG }}
+          PIN_KERNEL_RELEASE_BRANCH: ${{ env.PIN_KERNEL_RELEASE_BRANCH }}
+        run: |
+          set -euo pipefail
+          SAFE_REF=$(printf '%s' "$REF_NAME" | tr '/ ' '-' | tr -cd '[:alnum:]._-')
+          if [ -z "$SAFE_REF" ]; then
+            SAFE_REF="run-$RUN_ID"
+          fi
+          SHORT_SHA=$(printf '%s' "$SHA" | cut -c1-8)
+          BUILD_TS=$(date -u +%Y%m%d-%H%M%S)
+          BUILD_TIME_ISO=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          NOTES_FILE="$RUNNER_TEMP/release-notes.md"
+
+          {
+            echo "## 调试版本说明 (Debug Build)"
+            echo
+            echo "> 这是**调试版本**（Debug/Prerelease），用于验证与排障，不作为稳定发布。"
+            echo
+            echo "### 构建信息"
+            echo "- 分支: \`$REF_NAME\`"
+            echo "- 提交: \`$SHA\`"
+            echo "- 构建时间(UTC): \`$BUILD_TIME_ISO\`"
+            echo "- Workflow: https://github.com/$REPOSITORY/actions/runs/$RUN_ID"
+            echo "- APK flavor: \`MetaRelease\`"
+            echo "- Kernels: \`alpha\`, \`persistent-pin\`"
+            echo "- 文件名后缀: \`-alpha.apk\` 使用上游 alpha kernel，\`-pin.apk\` 使用 persistent-pin kernel。"
+            echo
+            echo "### Pin 内核发布线"
+            echo "- pin release tag: \`$PIN_KERNEL_RELEASE_TAG\`"
+            echo "- pin release branch: \`$PIN_KERNEL_RELEASE_BRANCH\`"
+            echo "- pin resolved commit: \`$PIN_KERNEL_REF\`"
+            echo
+            echo "### Kernel Build Details"
+            find "$RUNNER_TEMP/debug-release" -maxdepth 1 -type f -name 'kernel-*.md' -print0 | sort -z | xargs -0 -r cat
+            echo
+            echo "### Artifacts"
+            find "$RUNNER_TEMP/debug-release" -maxdepth 1 -type f -name '*.apk' -printf -- "- %f\n" | sort
+          } > "$NOTES_FILE"
+
+          echo "tag_name=debug-meta-$BUILD_TS-$SAFE_REF-dual-kernel-$SHORT_SHA-r$RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "release_name=$BUILD_TS Debug Meta 调试版本 ($REF_NAME / dual-kernel) [$SHORT_SHA / run $RUN_ID]" >> "$GITHUB_OUTPUT"
+          echo "notes_file=$NOTES_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Publish unified prerelease
         env:
           GH_TOKEN: ${{ github.token }}
           TAG_NAME: ${{ steps.release-meta.outputs.tag_name }}
@@ -349,9 +328,16 @@ jobs:
           TARGET_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
+          shopt -s nullglob
+          APK_FILES=("$RUNNER_TEMP"/debug-release/*.apk)
+
+          if [ ${#APK_FILES[@]} -eq 0 ]; then
+            echo "No APK files found to publish."
+            exit 1
+          fi
 
           gh release create "$TAG_NAME" \
-            app/build/outputs/apk/alpha/release/*.apk \
+            "${APK_FILES[@]}" \
             --target "$TARGET_SHA" \
             --title "$RELEASE_NAME" \
             --notes-file "$NOTES_FILE" \
