@@ -41,6 +41,9 @@ class NetworkObserveModule(service: Service) : Module<Network>(service) {
     @Volatile
     private var curDnsList = emptyList<String>()
 
+    @Volatile
+    private var curNetworkKey: String? = null
+
     private val callback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
             Log.i("NetworkObserve onAvailable network=$network")
@@ -134,6 +137,22 @@ class NetworkObserveModule(service: Service) : Module<Network>(service) {
             ?: emptyList()).map { x -> x.asSocketAddressText(53) }
     }
 
+    private fun currentNetworkKey(): String? {
+        val entry = networkInfos.asSequence().minByOrNull { networkToInt(it) } ?: return null
+        val capabilities = connectivity.getNetworkCapabilities(entry.key) ?: return null
+        val transport = when {
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "wifi"
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "ethernet"
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && capabilities.hasTransport(NetworkCapabilities.TRANSPORT_USB) -> "usb"
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_BLUETOOTH) -> "bluetooth"
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "cellular"
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM && capabilities.hasTransport(NetworkCapabilities.TRANSPORT_SATELLITE) -> "satellite"
+            else -> "other"
+        }
+
+        return "${entry.key}@$transport"
+    }
+
     private fun notifyDnsChange(force: Boolean = false) {
         val dnsList = currentDnsList()
         val prevDnsList = curDnsList
@@ -146,6 +165,19 @@ class NetworkObserveModule(service: Service) : Module<Network>(service) {
             Log.i("notifyDnsChange force=$force $prevDnsList -> $notifyList")
             Clash.notifyDnsChanged(notifyList)
         }
+    }
+
+    private fun notifyNetworkRecoveryIfChanged() {
+        val networkKey = currentNetworkKey()
+        val prevNetworkKey = curNetworkKey
+        val networkChanged = networkKey != null && networkKey != prevNetworkKey
+
+        if (networkKey != null) {
+            curNetworkKey = networkKey
+        }
+
+        Log.i("NetworkObserve recovery networkChanged=$networkChanged $prevNetworkKey -> $networkKey")
+        notifyDnsChange(force = networkChanged)
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -167,7 +199,7 @@ class NetworkObserveModule(service: Service) : Module<Network>(service) {
                     if (pendingNetworkRecovery) {
                         onTimeout(NETWORK_CHANGE_DEBOUNCE_MS) {
                             pendingNetworkRecovery = false
-                            notifyDnsChange(force = true)
+                            notifyNetworkRecoveryIfChanged()
                         }
                     }
                 }
