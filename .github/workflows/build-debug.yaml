@@ -215,23 +215,16 @@ jobs:
 
       - name: Build
         if: success()
-        run: ./gradlew --no-daemon app:assembleAlphaRelease app:assembleMetaRelease
+        run: ./gradlew --no-daemon app:assembleAlphaRelease
 
-      - name: Suffix APK names by kernel
+      - name: Prefix APK names by kernel
         env:
-          KERNEL_ID: ${{ matrix.kernel.id }}
+          KERNEL_LABEL: ${{ matrix.kernel.label }}
         run: |
           set -euo pipefail
           shopt -s nullglob
-          APK_DIRS=(
-            "app/build/outputs/apk/alpha/release"
-            "app/build/outputs/apk/meta/release"
-          )
-          FILES=()
-
-          for apk_dir in "${APK_DIRS[@]}"; do
-            FILES+=("$apk_dir"/*.apk)
-          done
+          APK_DIR="app/build/outputs/apk/alpha/release"
+          FILES=("$APK_DIR"/*.apk)
 
           if [ ${#FILES[@]} -eq 0 ]; then
             echo "No debug APKs produced."
@@ -240,7 +233,7 @@ jobs:
 
           for f in "${FILES[@]}"; do
             base=$(basename "$f")
-            mv "$f" "$(dirname "$f")/${base%.apk}-${KERNEL_ID}.apk"
+            mv "$f" "$APK_DIR/${KERNEL_LABEL}-${base}"
           done
 
       - name: Upload Debug APK Artifact
@@ -249,8 +242,7 @@ jobs:
         with:
           name: debug-apk-${{ matrix.kernel.id }}
           path: |
-            app/build/outputs/apk/alpha/release/*-${{ matrix.kernel.id }}.apk
-            app/build/outputs/apk/meta/release/*-${{ matrix.kernel.id }}.apk
+            app/build/outputs/apk/alpha/release/${{ matrix.kernel.label }}-*.apk
 
       - name: Upload Debug Metadata Artifact
         uses: actions/upload-artifact@v4
@@ -309,10 +301,10 @@ jobs:
             echo "- 提交: \`$SHA\`"
             echo "- 构建时间(UTC): \`$BUILD_TIME_ISO\`"
             echo "- Workflow: https://github.com/$REPOSITORY/actions/runs/$RUN_ID"
-            echo "- APK flavors: \`AlphaRelease\`, \`MetaRelease\`"
+            echo "- APK flavor: \`AlphaRelease\`"
             echo "- Kernels: \`alpha\`, \`persistent-pin\`"
-            echo "- 文件名包含 \`alpha\` / \`meta\` 表示 Android flavor；末尾 \`-alpha.apk\` / \`-pin.apk\` 表示内核档位。"
-            echo "- 兼容旧数据安装: 使用 \`cmfa-*-alpha-*-pin.apk\`，包名保持 \`com.github.metacubex.clash.alpha\`。"
+            echo "- Android 包名保持 \`com.github.metacubex.clash.alpha\`，可覆盖历史 Debug Alpha / pin 包并保留数据。"
+            echo "- 文件名前缀 \`alpha-kernel-\` 使用上游 alpha kernel，\`persistent-pin-\` 使用 persistent-pin kernel。"
             echo
             echo "### Pin 内核发布线"
             echo "- pin release tag: \`$PIN_KERNEL_RELEASE_TAG\`"
@@ -336,8 +328,8 @@ jobs:
             fi
           } > "$NOTES_FILE"
 
-          echo "tag_name=debug-meta-$BUILD_TS-$SAFE_REF-dual-kernel-$SHORT_SHA-r$RUN_ID" >> "$GITHUB_OUTPUT"
-          echo "release_name=$BUILD_TS Debug Meta 调试版本 ($REF_NAME / dual-kernel) [$SHORT_SHA / run $RUN_ID]" >> "$GITHUB_OUTPUT"
+          echo "tag_name=debug-alpha-$BUILD_TS-$SAFE_REF-dual-kernel-$SHORT_SHA-r$RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "release_name=$BUILD_TS Debug Alpha 调试版本 ($REF_NAME / dual-kernel) [$SHORT_SHA / run $RUN_ID]" >> "$GITHUB_OUTPUT"
           echo "notes_file=$NOTES_FILE" >> "$GITHUB_OUTPUT"
 
       - name: Publish unified prerelease
