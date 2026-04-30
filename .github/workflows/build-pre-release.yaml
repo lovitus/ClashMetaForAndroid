@@ -265,6 +265,8 @@ jobs:
           BUILD_TS=$(date -u +%Y%m%d-%H%M%S)
           BUILD_TIME_ISO=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           NOTES_FILE="$RUNNER_TEMP/prerelease-notes.md"
+          mapfile -t KERNEL_INFO_FILES < <(find "$RUNNER_TEMP/prerelease" -type f -name 'kernel-*.md' | sort)
+          mapfile -t APK_FILES < <(find "$RUNNER_TEMP/prerelease" -type f -name '*.apk' | sort)
 
           {
             echo "Automated unified pre-release build for \`$REF_NAME\`."
@@ -283,10 +285,20 @@ jobs:
             echo "- pin resolved commit: \`$PIN_KERNEL_REF\`"
             echo
             echo "### Kernel Build Details"
-            find "$RUNNER_TEMP/prerelease" -maxdepth 1 -type f -name 'kernel-*.md' -print0 | sort -z | xargs -0 -r cat
+            if [ ${#KERNEL_INFO_FILES[@]} -gt 0 ]; then
+              cat "${KERNEL_INFO_FILES[@]}"
+            else
+              echo "- No kernel metadata files found."
+            fi
             echo
             echo "### Artifacts"
-            find "$RUNNER_TEMP/prerelease" -maxdepth 1 -type f -name '*.apk' -printf -- "- %f\n" | sort
+            if [ ${#APK_FILES[@]} -gt 0 ]; then
+              for apk in "${APK_FILES[@]}"; do
+                echo "- $(basename "$apk")"
+              done
+            else
+              echo "- No APK files found."
+            fi
           } > "$NOTES_FILE"
 
           echo "tag_name=prerelease-meta-$BUILD_TS-$SAFE_REF-dual-kernel-$SHORT_SHA-r$RUN_ID" >> "$GITHUB_OUTPUT"
@@ -302,8 +314,7 @@ jobs:
           TARGET_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          shopt -s nullglob
-          APK_FILES=("$RUNNER_TEMP"/prerelease/*.apk)
+          mapfile -t APK_FILES < <(find "$RUNNER_TEMP/prerelease" -type f -name '*.apk' | sort)
 
           if [ ${#APK_FILES[@]} -eq 0 ]; then
             echo "No APK files found to publish."

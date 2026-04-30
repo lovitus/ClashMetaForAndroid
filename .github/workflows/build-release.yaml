@@ -268,6 +268,10 @@ jobs:
   PublishRelease:
     needs: [PrepareRelease, BuildRelease]
     runs-on: ubuntu-latest
+    env:
+      PIN_KERNEL_REF: 313230d95da4f28f9c23327709d7c91dcfc48919
+      PIN_KERNEL_RELEASE_TAG: v2026.04.20-persistent-pin.5
+      PIN_KERNEL_RELEASE_BRANCH: persistent-pin-option-1.19.24merge
     steps:
       - name: Download release artifacts
         uses: actions/download-artifact@v4
@@ -288,6 +292,7 @@ jobs:
         run: |
           set -euo pipefail
           NOTES_FILE="$RUNNER_TEMP/release-notes.md"
+          mapfile -t APK_FILES < <(find "$RUNNER_TEMP/release-apks" -type f -name '*.apk' | sort)
 
           {
             echo "Automated dual-kernel release build for \`$RELEASE_TAG\`."
@@ -305,7 +310,13 @@ jobs:
             echo "- 说明: 本仓库正式 release 保持一套应用代码，同时提供 \`alpha\` 与 \`persistent-pin\` 两套安装包。"
             echo
             echo "### Artifacts"
-            find "$RUNNER_TEMP/release-apks" -maxdepth 1 -type f -name '*.apk' -printf -- "- %f\n" | sort
+            if [ ${#APK_FILES[@]} -gt 0 ]; then
+              for apk in "${APK_FILES[@]}"; do
+                echo "- $(basename "$apk")"
+              done
+            else
+              echo "- No APK files found."
+            fi
             echo
             echo "### 中文说明"
             echo "- 本次正式发布为双内核统一构建结果。"
@@ -322,8 +333,7 @@ jobs:
           NOTES_FILE: ${{ steps.release-meta.outputs.notes_file }}
         run: |
           set -euo pipefail
-          shopt -s nullglob
-          APK_FILES=("$RUNNER_TEMP"/release-apks/*.apk)
+          mapfile -t APK_FILES < <(find "$RUNNER_TEMP/release-apks" -type f -name '*.apk' | sort)
 
           if [ ${#APK_FILES[@]} -eq 0 ]; then
             echo "No APK files found to publish."
