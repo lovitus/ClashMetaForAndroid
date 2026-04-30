@@ -53,6 +53,9 @@ class NetworkObserveModule(service: Service) : Module<Network>(service) {
         override fun onLosing(network: Network, maxMsToLive: Int) {
             Log.i("NetworkObserve onLosing network=$network")
             networkInfos[network]?.losingMs = System.currentTimeMillis() + maxMsToLive
+            // Treat possible network loss as a recovery signal early. This may close
+            // active connections before the network is fully lost, but it avoids stale
+            // app-side flows lingering across real network switches.
             notifyNetworkChangedDebounced()
 
             networks.trySend(network)
@@ -174,6 +177,9 @@ class NetworkObserveModule(service: Service) : Module<Network>(service) {
                 unregister()
 
                 Log.i("NetworkObserve dns = []")
+                // Service shutdown intentionally clears Android-provided system DNS.
+                // NotifyDnsChanged also closes active connections, which is harmless here
+                // because the VPN/core runtime is already being torn down.
                 Clash.notifyDnsChanged(emptyList())
             }
         }
